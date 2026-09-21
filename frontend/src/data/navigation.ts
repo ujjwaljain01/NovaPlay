@@ -1,3 +1,4 @@
+// src/data/navigation.ts
 import {
 	HouseIcon,
 	FeatherIcon,
@@ -39,7 +40,7 @@ export const guestNavigation: NavigationSection[] = [
 			},
 			{
 				id: 'tweets',
-				label: 'tweets',
+				label: 'Tweets',
 				href: '/tweets',
 				icon: FeatherIcon,
 			},
@@ -51,11 +52,24 @@ export const guestNavigation: NavigationSection[] = [
 			},
 		],
 	},
-
+	{
+		id: 'you',
+		title: 'You',
+		items: [
+			{
+				id: 'you',
+				label: 'Sign in',
+				href: '/signin',
+				icon: UserIcon,
+				isSignIn: true, // custom flag for identification
+			},
+		],
+	},
 	{
 		id: 'explore',
 		title: 'Explore',
 		items: [
+			// ... same as before
 			{
 				id: 'trending',
 				label: 'Trending',
@@ -91,6 +105,7 @@ export const guestNavigation: NavigationSection[] = [
 ];
 
 export const authenticatedNavigation: NavigationSection[] = [
+	// ... unchanged
 	{
 		id: 'main',
 		items: [
@@ -102,7 +117,7 @@ export const authenticatedNavigation: NavigationSection[] = [
 			},
 			{
 				id: 'tweets',
-				label: 'tweets',
+				label: 'Tweets',
 				href: '/tweets',
 				icon: FeatherIcon,
 			},
@@ -120,7 +135,6 @@ export const authenticatedNavigation: NavigationSection[] = [
 			},
 		],
 	},
-
 	{
 		id: 'you',
 		title: 'You',
@@ -163,11 +177,11 @@ export const authenticatedNavigation: NavigationSection[] = [
 			},
 		],
 	},
-
 	{
 		id: 'explore',
 		title: 'Explore',
 		items: [
+			// ... same as guest
 			{
 				id: 'trending',
 				label: 'Trending',

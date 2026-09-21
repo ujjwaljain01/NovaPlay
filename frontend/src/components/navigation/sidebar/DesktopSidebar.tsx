@@ -1,22 +1,34 @@
 // src/components/navigation/sidebar/DesktopSidebar.tsx
-
+import { useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-
 import { cn } from '@/lib/utils';
-
 import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_WIDTH } from '@/constants/layout';
-
 import { useNavigation } from '@/hooks/use-navigation';
-
 import { useSidebarCollapsed } from '@/store/sidebar.selector';
-
 import { SidebarFooter } from './SidebarFooter';
 import { SidebarGroup } from './SidebarGroup';
 
+const PRIMARY_ITEM_IDS = ['home', 'tweets', 'subscriptions', 'you'];
+
 export function DesktopSidebar() {
 	const collapsed = useSidebarCollapsed();
-
 	const navigation = useNavigation();
+
+	// When collapsed, only show primary items in a single group
+	const filteredNavigation = useMemo(() => {
+		if (!collapsed) return navigation;
+
+		const primaryItems = navigation
+			.flatMap((section) => section.items)
+			.filter((item) => PRIMARY_ITEM_IDS.includes(item.id));
+
+		return [
+			{
+				id: 'primary',
+				items: primaryItems,
+			},
+		];
+	}, [navigation, collapsed]);
 
 	return (
 		<motion.aside
@@ -49,25 +61,16 @@ export function DesktopSidebar() {
 			{/* Navigation */}
 			<motion.div
 				layout
-				className="relative flex-1 overflow-y-auto pb-3 scrollbar"
+				className="relative flex-1 overflow-y-auto scrollbar"
 			>
 				<AnimatePresence mode="popLayout">
-					{navigation.map((section, index) => (
+					{filteredNavigation.map((section, index) => (
 						<motion.div
 							key={section.id}
 							layout
-							initial={{
-								opacity: 0,
-								y: 10,
-							}}
-							animate={{
-								opacity: 1,
-								y: 0,
-							}}
-							exit={{
-								opacity: 0,
-								y: 10,
-							}}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: 10 }}
 							transition={{
 								delay: index * 0.03,
 								duration: 0.22,
@@ -77,18 +80,11 @@ export function DesktopSidebar() {
 						</motion.div>
 					))}
 				</AnimatePresence>
+				<SidebarFooter />
 			</motion.div>
 
 			{/* Bottom Fade */}
 			<div className="pointer-events-none absolute inset-x-0 bottom-16 h-16 bg-gradient-to-t from-background to-transparent" />
-
-			{/* Footer */}
-			<motion.div
-				layout
-				className="border-t border-border/60 bg-background/80 backdrop-blur-xl"
-			>
-				<SidebarFooter />
-			</motion.div>
 		</motion.aside>
 	);
 }

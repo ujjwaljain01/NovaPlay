@@ -1,7 +1,3 @@
-import { VideoSection, VideoSectionSkeleton } from '../sections';
-
-import { TweetSection } from '../sections/TweetSection';
-
 import { useHomeFeed } from '@/features/home';
 
 import { HOME_SECTIONS } from '@/constants/home-sections';
@@ -19,11 +15,7 @@ export function HomeFeed() {
 	} = useHomeFeed();
 
 	if (isLoading) {
-		return (
-			<div className="space-y-14">
-				<VideoSectionSkeleton />
-			</div>
-		);
+		return <div className="space-y-14">Loading...</div>;
 	}
 
 	if (isError) {
@@ -32,7 +24,7 @@ export function HomeFeed() {
 
 	return (
 		<div className="space-y-14">
-			<VideoSection
+			{/* <VideoSection
 				title={HOME_SECTIONS.RECOMMENDED}
 				videos={recommendedVideos}
 			/>
@@ -42,17 +34,17 @@ export function HomeFeed() {
 				tweets={latestTweets}
 			/> */}
 
-			<VideoSection
+			{/* <VideoSection
 				title={HOME_SECTIONS.TRENDING}
 				videos={trendingVideos}
-			/>
+			/> */}
 
 			{/* <TweetSection
 				title={HOME_SECTIONS.DEVELOPER_UPDATES}
 				tweets={developerTweets}
 			/> */}
 
-			<VideoSection title={HOME_SECTIONS.LATEST} videos={latestVideos} />
+			{/* 	<VideoSection title={HOME_SECTIONS.LATEST} videos={latestVideos} /> */}
 		</div>
 	);
 }

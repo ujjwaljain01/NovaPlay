@@ -2,7 +2,7 @@ export const NAVBAR_HEIGHT = 56;
 
 export const SIDEBAR_WIDTH = 240;
 
-export const SIDEBAR_COLLAPSED_WIDTH = 84;
+export const SIDEBAR_COLLAPSED_WIDTH = 76;
 
 export const MOBILE_BREAKPOINT = 768;
 

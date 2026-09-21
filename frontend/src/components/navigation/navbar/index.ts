@@ -2,7 +2,6 @@
 
 export * from './Navbar';
 export * from './SidebarToggle';
-export * from './Logo';
 export * from './SearchButton';
 export * from './CreateButton';
 export * from './NotificationButton';
