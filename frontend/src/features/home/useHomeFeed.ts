@@ -1,26 +1,32 @@
-// src/features/home/useHomeFeed.ts
-
-import { useVideos } from '@/features/videos';
-
-import { transformVideosToCardData } from '@/features/videos';
-
-// import { tweets } from './mock-tweets';
-
+import { useVideos, transformVideosToCardData } from '@/features/videos';
+import { useTweets } from '@/features/tweets';
 import { buildHomeFeed } from './home.transformer';
 
 export function useHomeFeed() {
-	const { data, isLoading, isError } = useVideos({
-		page: 1,
-		limit: 9,
+	const {
+		data: videosData,
+		isLoading: isVideosLoading,
+		isError: isVideosError,
+	} = useVideos({
+		limit: 12,
 	});
 
-	const videos = transformVideosToCardData(data?.docs ?? []);
+	const {
+		data: tweetsData,
+		isLoading: isTweetsLoading,
+		isError: isTweetsError,
+	} = useTweets({
+		limit: 8,
+	});
+
+	const rawVideos = videosData?.docs ?? [];
+	const videos = transformVideosToCardData(rawVideos);
+	const tweets = tweetsData?.docs ?? [];
 
 	return buildHomeFeed({
 		videos,
-
-		isLoading,
-
-		isError,
+		tweets,
+		isLoading: isVideosLoading || isTweetsLoading,
+		isError: isVideosError && isTweetsError,
 	});
 }

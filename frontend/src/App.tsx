@@ -1,4 +1,3 @@
-import './App.css';
 import { AppProviders } from '@/providers/AppProviders';
 import { AppRouter } from '@/routes';
 import { useInitializeAuth } from '@/features/auth/useInitializeAuth';

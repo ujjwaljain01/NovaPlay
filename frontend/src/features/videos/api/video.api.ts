@@ -48,3 +48,41 @@ export const incrementVideoViews = async (videoId: string) => {
 
 	return data.data;
 };
+
+export const publishVideo = async (formData: FormData) => {
+	const { data } = await apiClient.post<ApiResponse<Video>>(
+		'/videos',
+		formData,
+		{
+			headers: {
+				'Content-Type': 'multipart/form-data',
+			},
+		},
+	);
+
+	return data.data;
+};
+
+export const deleteVideo = async (videoId: string) => {
+	const { data } = await apiClient.delete<ApiResponse<null>>(
+		`/videos/${videoId}`,
+	);
+
+	return data.data;
+};
+
+export const toggleVideoLike = async (videoId: string) => {
+	const { data } = await apiClient.post<ApiResponse<any>>(
+		`/likes/toggle/v/${videoId}`,
+	);
+
+	return data.data;
+};
+
+export const getLikedVideos = async () => {
+	const { data } = await apiClient.get<ApiResponse<Video[]>>(
+		'/likes/videos',
+	);
+
+	return data.data;
+};
