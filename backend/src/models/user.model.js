@@ -32,16 +32,20 @@ const userSchema = new Schema(
     coverImage: {
       type: String,
     },
-    avatarPublicId:{
+    avatarPublicId: {
       type: String,
-      required: true,
+      required: false,
     },
-    coverImagePublicId:{
-      type:String
+    coverImagePublicId: {
+      type: String,
     },
     password: {
       type: String,
-      required: [true, "password is required"],
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
     refreshToken: {
       type: String,

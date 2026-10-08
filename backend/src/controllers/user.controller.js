@@ -487,6 +487,88 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     );
 });
 
+const googleAuthCallback = asyncHandler(async (req, res) => {
+  try {
+    const googleUser = req.user;
+
+    if (!googleUser) {
+      throw new ApiError(400, "Google user data is missing");
+    }
+
+    console.log("Google User:", googleUser);
+
+    const email = googleUser.emails[0].value;
+    const googleId = googleUser.id;
+    const fullName = googleUser.displayName;
+    const avatar = googleUser.photos[0].value;
+
+    const isEmailVerified = googleUser._json?.email_verified === true;
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (!user) {
+      const generatedUsername =
+        email.split("@")[0] + Math.floor(1000 + Math.random() * 9000);
+
+      user = await User.create({
+        googleId,
+        email,
+        fullName,
+        username: generatedUsername,
+        avatar,
+      });
+    } else if (!user.googleId) {
+      if (!isEmailVerified) {
+        throw new ApiError(
+          400,
+          "Your Google email must be verified to link accounts automatically."
+        );
+      }
+
+      user.googleId = googleId;
+      if (!user.avatar && avatar) user.avatar = avatar; // Enriches profile if missing
+      await user.save();
+    }
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
+
+    const createdUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    if (!createdUser) {
+      throw new ApiError(
+        500,
+        "something went wrong while registering the user"
+      );
+    }
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          createdUser,
+          "User registered successfully via Google"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(
+      error.statusCode || 500,
+      error?.message || "Something went wrong during Google authentication"
+    );
+  }
+});
+
 export {
   registerUser,
   loginUser,
@@ -499,4 +581,5 @@ export {
   updateUserCoverImage,
   getUserChannelProfile,
   getWatchHistory,
+  googleAuthCallback,
 };
