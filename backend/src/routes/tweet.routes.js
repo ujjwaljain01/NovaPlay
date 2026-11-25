@@ -6,6 +6,7 @@ import {
   getUserTweets,
   updateTweet,
   getTweetById,
+  recordTweetView,
 } from "../controllers/tweet.controller.js";
 import { optionalVerifyJWT, verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -16,6 +17,7 @@ router
   .get(optionalVerifyJWT, getAllTweets)
   .post(verifyJWT, createTweet);
 router.route("/user/:userId").get(optionalVerifyJWT, getUserTweets);
+router.route("/:tweetId/view").post(optionalVerifyJWT, recordTweetView);
 router
   .route("/:tweetId")
   .get(optionalVerifyJWT, getTweetById)

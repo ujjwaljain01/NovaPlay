@@ -32,6 +32,8 @@ import likeRouter from "./routes/like.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
 import authRouter from "./routes/auth.route.js";
 import searchRouter from "./routes/search.route.js";
+import exploreRouter from "./routes/explore.routes.js";
+import feedbackRouter from "./routes/feedback.routes.js";
 
 //routes declaration
 app.use("/api/v1/users", userRouter);
@@ -43,8 +45,11 @@ app.use("/api/v1/subscriptions", subscriptionRouter);
 app.use("/api/v1/comments", commentRouter);
 app.use("/api/v1/likes", likeRouter);
 app.use("/api/v1/playlist", playlistRouter);
+app.use("/api/v1/playlists", playlistRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/search", searchRouter);
+app.use("/api/v1/explore", exploreRouter);
+app.use("/api/v1/feedback", feedbackRouter);
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || (err.name === "MulterError" ? 400 : 500);

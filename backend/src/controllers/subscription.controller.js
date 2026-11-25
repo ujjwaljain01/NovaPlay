@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asynchandler.js";
 import { Subscription } from "../models/subscription.model.js";
+import { Video } from "../models/video.model.js";
 
 const ensureValidObject = (id, name = "id") => {
   if (!mongoose.isValidObjectId(id)) {
@@ -178,4 +179,250 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     );
 });
 
-export { getSubscribedChannels, getUserChannelSubscribers, toggleSubscription };
+const parsePagination = (query, defaultLimit) => {
+  const parsedOffset = Number.parseInt(query.offset, 10);
+  const parsedLimit = Number.parseInt(query.limit, 10);
+  const offset = Number.isNaN(parsedOffset) ? 0 : Math.max(0, parsedOffset);
+  const limit = Number.isNaN(parsedLimit)
+    ? defaultLimit
+    : Math.min(50, Math.max(1, parsedLimit));
+  return { offset, limit };
+};
+
+const getMySubscribedChannels = asyncHandler(async (req, res) => {
+  const { offset, limit } = parsePagination(req.query, 4);
+
+  const [subscriptions, totalCount] = await Promise.all([
+    Subscription.find({ subscriber: req.user._id })
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(offset)
+      .limit(limit)
+      .populate("channel", "username fullName avatar")
+      .lean(),
+    Subscription.countDocuments({ subscriber: req.user._id }),
+  ]);
+
+  const channels = subscriptions
+    .filter((sub) => sub.channel)
+    .map((sub) => ({
+      _id: sub.channel._id,
+      username: sub.channel.username,
+      fullName: sub.channel.fullName,
+      avatar: sub.channel.avatar,
+    }));
+
+  const hasMore = offset + subscriptions.length < totalCount;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        channels,
+        totalCount,
+        hasMore,
+      },
+      "Subscribed channels retrieved successfully"
+    )
+  );
+});
+
+const getSubscriptionsFeed = asyncHandler(async (req, res) => {
+  const { offset, limit } = parsePagination(req.query, 20);
+  const currentUserId = new mongoose.Types.ObjectId(req.user._id);
+
+  const channelIds = await Subscription.distinct("channel", {
+    subscriber: currentUserId,
+  });
+
+  if (!channelIds.length) {
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          items: [],
+          hasMore: false,
+          nextOffset: null,
+        },
+        "Subscriptions feed fetched successfully"
+      )
+    );
+  }
+
+  const items = await Video.aggregate([
+    {
+      $match: {
+        owner: { $in: channelIds },
+        isPublished: true,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        feedType: { $literal: "video" },
+        createdAt: 1,
+        owner: 1,
+        title: 1,
+        thumbnail: 1,
+        duration: 1,
+        views: 1,
+      },
+    },
+    {
+      $unionWith: {
+        coll: "tweets",
+        pipeline: [
+          {
+            $match: {
+              owner: { $in: channelIds },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              feedType: { $literal: "tweet" },
+              createdAt: 1,
+              owner: 1,
+              content: 1,
+              views: { $ifNull: ["$views", 0] },
+            },
+          },
+        ],
+      },
+    },
+    { $sort: { createdAt: -1, _id: -1 } },
+    { $skip: offset },
+    { $limit: limit + 1 },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              username: 1,
+              fullName: 1,
+              avatar: 1,
+            },
+          },
+        ],
+        as: "ownerDetails",
+      },
+    },
+    {
+      $lookup: {
+        from: "likes",
+        let: { itemId: "$_id", itemType: "$feedType" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$$itemType", "tweet"] },
+                  { $eq: ["$targetId", "$$itemId"] },
+                  { $eq: ["$targetType", "Tweet"] },
+                ],
+              },
+            },
+          },
+          { $project: { likedBy: 1 } },
+        ],
+        as: "tweetLikes",
+      },
+    },
+    {
+      $lookup: {
+        from: "comments",
+        let: { itemId: "$_id", itemType: "$feedType" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$$itemType", "tweet"] },
+                  { $eq: ["$targetId", "$$itemId"] },
+                  { $eq: ["$targetType", "Tweet"] },
+                  { $eq: ["$parentCommentId", null] },
+                ],
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: "comments",
+              localField: "_id",
+              foreignField: "parentCommentId",
+              as: "replies",
+            },
+          },
+          {
+            $project: {
+              total: { $add: [1, { $size: "$replies" }] },
+            },
+          },
+        ],
+        as: "tweetCommentThreads",
+      },
+    },
+    {
+      $addFields: {
+        owner: { $first: "$ownerDetails" },
+        likesCount: {
+          $cond: [
+            { $eq: ["$feedType", "tweet"] },
+            { $size: "$tweetLikes" },
+            "$$REMOVE",
+          ],
+        },
+        commentsCount: {
+          $cond: [
+            { $eq: ["$feedType", "tweet"] },
+            { $sum: "$tweetCommentThreads.total" },
+            "$$REMOVE",
+          ],
+        },
+        isLiked: {
+          $cond: [
+            { $eq: ["$feedType", "tweet"] },
+            { $in: [currentUserId, "$tweetLikes.likedBy"] },
+            "$$REMOVE",
+          ],
+        },
+      },
+    },
+    {
+      $project: {
+        ownerDetails: 0,
+        tweetLikes: 0,
+        tweetCommentThreads: 0,
+      },
+    },
+  ]);
+
+  const hasMore = items.length > limit;
+  if (hasMore) {
+    items.pop();
+  }
+  const nextOffset = hasMore ? offset + items.length : null;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        items,
+        hasMore,
+        nextOffset,
+      },
+      "Subscriptions feed fetched successfully"
+    )
+  );
+});
+
+export {
+  getSubscribedChannels,
+  getUserChannelSubscribers,
+  toggleSubscription,
+  getMySubscribedChannels,
+  getSubscriptionsFeed,
+};

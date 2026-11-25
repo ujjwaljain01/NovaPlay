@@ -2,9 +2,11 @@ import { Router } from "express";
 import {
   deleteVideo,
   getAllVideos,
+  getMyVideos,
   getVideoById,
   publishVideo,
   togglePublishStatus,
+  updateVideo,
   updateVideoDetails,
   updateVideoAssets,
   incrementViews,
@@ -19,9 +21,12 @@ router
   .get(getAllVideos)
   .post(verifyJWT, publishVideo);
 
+router.route("/my-videos").get(verifyJWT, getMyVideos);
+
 router
   .route("/:videoId")
   .get(optionalVerifyJWT, getVideoById)
+  .patch(verifyJWT, updateVideo)
   .delete(verifyJWT, deleteVideo);
 
 router.route("/:videoId/details").patch(verifyJWT, updateVideoDetails);

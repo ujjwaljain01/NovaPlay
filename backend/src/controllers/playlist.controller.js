@@ -17,7 +17,110 @@ const ensurePlaylistOwner = (playlist, userId) => {
   }
 };
 
+const ensureNotSystemPlaylist = (playlist) => {
+  if (playlist.isSystem) {
+    throw new ApiError(403, "System playlists cannot be modified or deleted");
+  }
+};
+
 const sanitizeText = (text) => (typeof text === "string" ? text.trim() : "");
+
+const buildPopulatedPlaylistPipeline = (matchFilter) => [
+  {
+    $match: matchFilter,
+  },
+  {
+    $lookup: {
+      from: "videos",
+      localField: "videos",
+      foreignField: "_id",
+      as: "videoDetails",
+      pipeline: [
+        {
+          $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "ownerDetails",
+            pipeline: [
+              {
+                $project: {
+                  fullName: 1,
+                  _id: 1,
+                },
+              },
+            ],
+          },
+        },
+        {
+          $unwind: {
+            path: "$ownerDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            thumbnail: 1,
+            duration: 1,
+            owner: "$ownerDetails",
+          },
+        },
+      ],
+    },
+  },
+  {
+    $lookup: {
+      from: "users",
+      localField: "owner",
+      foreignField: "_id",
+      as: "playlistOwnerDetails",
+      pipeline: [
+        {
+          $project: {
+            avatar: 1,
+            fullName: 1,
+            _id: 1,
+          },
+        },
+      ],
+    },
+  },
+  {
+    $unwind: {
+      path: "$playlistOwnerDetails",
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+  {
+    $project: {
+      _id: 1,
+      name: 1,
+      description: 1,
+      isSystem: 1,
+      systemType: 1,
+      videos: "$videoDetails",
+      owner: "$playlistOwnerDetails",
+    },
+  },
+];
+
+const ensureWatchLaterPlaylist = async (ownerId) =>
+  Playlist.findOneAndUpdate(
+    { owner: ownerId, systemType: "watch_later" },
+    {
+      $setOnInsert: {
+        name: "Watch Later",
+        description: "Saved videos to watch later",
+        owner: ownerId,
+        isSystem: true,
+        systemType: "watch_later",
+        videos: [],
+      },
+    },
+    { upsert: true, new: true }
+  );
 
 //router.route("/").post(createPlaylist);
 const createPlaylist = asyncHandler(async (req, res) => {
@@ -60,90 +163,39 @@ const createPlaylist = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, playlist, "Playlist created successfully"));
 });
 
+//router.route("/watch-later").get(getWatchLaterPlaylist);
+const getWatchLaterPlaylist = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Authentication required");
+  }
+
+  const watchLaterDoc = await ensureWatchLaterPlaylist(req.user._id);
+  const playlist = await Playlist.aggregate(
+    buildPopulatedPlaylistPipeline({ _id: watchLaterDoc._id })
+  );
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        playlist[0] ?? watchLaterDoc,
+        "Watch Later playlist fetched successfully"
+      )
+    );
+});
+
 //router.route("/:playlistId").get(getPlaylistById);
 const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
   ensureValidObjectId(playlistId, "playlist id");
 
-  const playlist = await Playlist.aggregate([
-    {
-      $match: { _id: new mongoose.Types.ObjectId(playlistId) },
-    },
-    {
-      $lookup: {
-        from: "videos",
-        localField: "videos",
-        foreignField: "_id",
-        as: "videoDetails",
-        pipeline: [
-          {
-            $lookup: {
-              from: "users",
-              localField: "owner",
-              foreignField: "_id",
-              as: "ownerDetails",
-              pipeline: [
-                {
-                  $project: {
-                    fullName: 1,
-                    _id: 1,
-                  },
-                },
-              ],
-            },
-          },
-          {
-            $unwind: {
-              path: "$ownerDetails",
-              preserveNullAndEmptyArrays: true,
-            },
-          },
-          {
-            $project: {
-              _id: 1,
-              title: 1,
-              thumbnail: 1,
-              duration: 1,
-              owner: "$ownerDetails",
-            },
-          },
-        ],
-      },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "owner",
-        foreignField: "_id",
-        as: "playlistOwnerDetails",
-        pipeline: [
-          {
-            $project: {
-              avatar: 1,
-              fullName: 1,
-              _id: 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $unwind: {
-        path: "$playlistOwnerDetails",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        name: 1,
-        description: 1,
-        videos: "$videoDetails",
-        owner: "$playlistOwnerDetails",
-      },
-    },
-  ]);
+  const playlist = await Playlist.aggregate(
+    buildPopulatedPlaylistPipeline({
+      _id: new mongoose.Types.ObjectId(playlistId),
+    })
+  );
 
   if (!playlist || playlist.length === 0) {
     throw new ApiError(404, "Playlist not found");
@@ -167,6 +219,7 @@ const updatePlaylist = asyncHandler(async (req, res) => {
   }
 
   ensurePlaylistOwner(playlist, req.user?._id);
+  ensureNotSystemPlaylist(playlist);
 
   const name =
     req.body?.name !== undefined ? sanitizeText(req.body.name) : undefined;
@@ -229,6 +282,7 @@ const deletePlaylist = asyncHandler(async (req, res) => {
   }
 
   ensurePlaylistOwner(playlist, req.user?._id);
+  ensureNotSystemPlaylist(playlist);
 
   await playlist.deleteOne();
 
@@ -330,6 +384,8 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
         name: 1,
         description: 1,
         owner: 1,
+        isSystem: 1,
+        systemType: 1,
         totalVideos: { $size: "$videos" },
         firstVideoThumbnail: { $arrayElemAt: ["$firstVideo.thumbnail", 0] },
       },
@@ -346,6 +402,7 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
 export {
   createPlaylist,
   getPlaylistById,
+  getWatchLaterPlaylist,
   updatePlaylist,
   deletePlaylist,
   addVideoToPlaylist,

@@ -2,6 +2,7 @@ import { Video } from "../models/video.model.js";
 import { User } from "../models/user.model.js";
 import { Tweet } from "../models/tweet.model.js";
 import { Playlist } from "../models/playlist.model.js";
+import { EXPLORE_CATEGORY_TAGS, normalizeTag } from "../utils/hashtags.js";
 
 // Helper function using non-mutating date logic
 const getDateFilter = (dateFilter) => {
@@ -30,31 +31,56 @@ export const globalSearch = async (req, res) => {
   try {
     const {
       q = "",
+      tag = "",
       page = 1,
       limit = 10,
       type = "all", // values: all, video, channel, playlist, tweets
       date = "anytime",
     } = req.query;
 
-    const parsedPage = Math.max(1, parseInt(page, 10));
-    const parsedLimit = Math.max(1, parseInt(limit, 10));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
     const skip = (parsedPage - 1) * parsedLimit;
     const dateRange = getDateFilter(date);
 
-    // Build base sorting strategies safely
-    // FIX: MongoDB requires meta-sorts to be completely isolated or prioritized purely by text score metadata
-    const sortStage = q ? { score: { $meta: "textScore" } } : { createdAt: -1 };
+    const trimmedQ = typeof q === "string" ? q.trim() : "";
+    const explicitTag = normalizeTag(tag);
+    const activeTag =
+      explicitTag || (trimmedQ.startsWith("#") ? normalizeTag(trimmedQ) : "");
+    const lowerQ = trimmedQ.toLowerCase();
+    const categoryTags =
+      !activeTag && EXPLORE_CATEGORY_TAGS[lowerQ]
+        ? EXPLORE_CATEGORY_TAGS[lowerQ]
+        : null;
+
+    // MongoDB forbids $meta: "textScore" when $text is omitted or combined inside $or.
+    const useTextScore = Boolean(trimmedQ && !activeTag && !categoryTags);
+    const sortStage = useTextScore
+      ? { score: { $meta: "textScore" }, createdAt: -1 }
+      : { createdAt: -1 };
 
     // ----------------------------------------------------
-    // CASE 1: Default View ("all") -> High-Performance Indexed Text Union
+    // CASE 1: Default View ("all") -> Videos + Tweets Union
     // ----------------------------------------------------
     if (type === "all") {
       const videoMatch = { isPublished: true };
       const tweetMatch = {};
 
-      if (q) {
-        videoMatch.$text = { $search: q };
-        tweetMatch.$text = { $search: q };
+      if (activeTag) {
+        videoMatch.hashtags = activeTag;
+        tweetMatch.hashtags = activeTag;
+      } else if (categoryTags) {
+        videoMatch.$or = [
+          { hashtags: { $in: categoryTags } },
+          { $text: { $search: trimmedQ } },
+        ];
+        tweetMatch.$or = [
+          { hashtags: { $in: categoryTags } },
+          { $text: { $search: trimmedQ } },
+        ];
+      } else if (trimmedQ) {
+        videoMatch.$text = { $search: trimmedQ };
+        tweetMatch.$text = { $search: trimmedQ };
       }
 
       if (dateRange) {
@@ -64,19 +90,27 @@ export const globalSearch = async (req, res) => {
 
       const aggregationResult = await Video.aggregate([
         { $match: videoMatch },
-        ...(q ? [{ $addFields: { score: { $meta: "textScore" } } }] : []),
+        ...(useTextScore
+          ? [{ $addFields: { score: { $meta: "textScore" } } }]
+          : []),
         { $addFields: { contentType: "video" } },
         {
           $unionWith: {
             coll: "tweets",
             pipeline: [
               { $match: tweetMatch },
-              ...(q ? [{ $addFields: { score: { $meta: "textScore" } } }] : []),
-              { $addFields: { contentType: "tweet" } },
+              ...(useTextScore
+                ? [{ $addFields: { score: { $meta: "textScore" } } }]
+                : []),
+              {
+                $addFields: {
+                  contentType: "tweet",
+                  views: { $ifNull: ["$views", 0] },
+                },
+              },
             ],
           },
         },
-        // Fast Index Lookups for Owner Details
         {
           $lookup: {
             from: "users",
@@ -141,12 +175,40 @@ export const globalSearch = async (req, res) => {
         .json({ success: false, message: "Invalid type parameter filter" });
     }
 
-    if (q) matchStage.$text = { $search: q };
+    const supportsHashtags = type === "video" || type === "tweets";
+
+    if (activeTag) {
+      if (!supportsHashtags) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            results: [],
+            page: parsedPage,
+            hasNextPage: false,
+            totalResults: 0,
+          },
+        });
+      }
+      matchStage.hashtags = activeTag;
+    } else if (categoryTags && supportsHashtags) {
+      matchStage.$or = [
+        { hashtags: { $in: categoryTags } },
+        { $text: { $search: trimmedQ } },
+      ];
+    } else if (trimmedQ) {
+      matchStage.$text = { $search: trimmedQ };
+    }
+
     if (dateRange && type !== "channel") matchStage.createdAt = dateRange;
 
     const pipeline = [{ $match: matchStage }];
+    const useSingleTextScore = Boolean(
+      trimmedQ &&
+        !activeTag &&
+        !(categoryTags && supportsHashtags)
+    );
 
-    if (q) {
+    if (useSingleTextScore) {
       pipeline.push({ $addFields: { score: { $meta: "textScore" } } });
     }
 
@@ -169,32 +231,35 @@ export const globalSearch = async (req, res) => {
               fullName: "$ownerDetails.fullName",
               avatar: "$ownerDetails.avatar",
             },
-            contentType: type,
+            contentType: type === "tweets" ? "tweet" : type,
+            ...(type === "tweets" ? { views: { $ifNull: ["$views", 0] } } : {}),
           },
         },
         { $project: { ownerDetails: 0 } }
       );
     } else {
-      // FIX: If channel profile matching, strip out sensitive data profiles like passwords
+      const channelProject = {
+        _id: 1,
+        username: 1,
+        fullName: 1,
+        avatar: 1,
+        createdAt: 1,
+      };
+      if (useSingleTextScore) {
+        channelProject.score = { $meta: "textScore" };
+      }
+
       pipeline.push(
-        {
-          $project: {
-            _id: 1,
-            username: 1,
-            fullName: 1,
-            avatar: 1,
-            createdAt: 1,
-            score: q ? { $meta: "textScore" } : undefined,
-          },
-        },
-        {
-          $addFields: { contentType: "channel" },
-        }
+        { $project: channelProject },
+        { $addFields: { contentType: "channel" } }
       );
     }
 
-    // FIX: Replaced crash-prone composite search sorting with dynamic sortStage definition
-    pipeline.push({ $sort: sortStage });
+    pipeline.push({
+      $sort: useSingleTextScore
+        ? { score: { $meta: "textScore" }, createdAt: -1 }
+        : { createdAt: -1 },
+    });
 
     pipeline.push({
       $facet: {

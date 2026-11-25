@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Video } from "../models/video.model.js";
+import { Subscription } from "../models/subscription.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asynchandler.js";
@@ -8,94 +9,87 @@ const getChannelStats = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
 
   if (!ownerId) {
-      throw new ApiError(401, "Unauthorized request");
+    throw new ApiError(401, "Unauthorized request");
   }
 
-  const channelStats = await Video.aggregate([
+  const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
+
+  const [subscriberCount, channelStats] = await Promise.all([
+    Subscription.countDocuments({ channel: ownerObjectId }),
+    Video.aggregate([
       {
-          $match: { owner: ownerId }
+        $match: { owner: ownerObjectId },
       },
       {
-          $lookup: {
-              from: "subscriptions",
-              localField: "owner",
-              foreignField: "channel",
-              as: "subscribers"
-          }
+        $lookup: {
+          from: "comments",
+          let: { videoId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$targetId", "$$videoId"] },
+                    { $eq: ["$targetType", "Video"] },
+                  ],
+                },
+              },
+            },
+            { $count: "count" },
+          ],
+          as: "commentStats",
+        },
       },
       {
-          $lookup: {
-              from: "comments",
-              localField: "_id",
-              foreignField: "targetId",
-              as: "comments"
-          }
+        $lookup: {
+          from: "likes",
+          let: { videoId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$targetId", "$$videoId"] },
+                    { $eq: ["$targetType", "Video"] },
+                  ],
+                },
+              },
+            },
+            { $count: "count" },
+          ],
+          as: "likeStats",
+        },
       },
       {
-          $lookup: {
-              from: "likes",
-              localField: "_id",
-              foreignField: "targetId",
-              as: "likes"
-          }
+        $group: {
+          _id: null,
+          videos: { $sum: 1 },
+          totalViews: { $sum: "$views" },
+          totalComments: {
+            $sum: { $ifNull: [{ $first: "$commentStats.count" }, 0] },
+          },
+          totalLikes: {
+            $sum: { $ifNull: [{ $first: "$likeStats.count" }, 0] },
+          },
+        },
       },
-      {
-          $facet: {
-              videoStats: [
-                  {
-                      $group: {
-                          _id: null,
-                          totalVideos: { $sum: 1 },
-                          totalViews: { $sum: "$views" }
-                      }
-                  }
-              ],
-              subscribersCount: [
-                  {
-                      $project: { subscribers: 1 }
-                  },
-                  { $unwind: "$subscribers" },
-                  { $group: { _id: null, count: { $sum: 1 } } }
-              ],
-              commentsCount: [
-                  {
-                      $project: { comments: 1 }
-                  },
-                  { $unwind: "$comments" },
-                  { $group: { _id: null, count: { $sum: 1 } } }
-              ],
-              likesCount: [
-                  {
-                      $project: { likes: 1 }
-                  },
-                  { $unwind: "$likes" },
-                  { $group: { _id: null, count: { $sum: 1 } } }
-              ]
-          }
-      }
+    ]),
   ]);
 
-  // Format the flattened result
-  const statsData = channelStats[0];
-  
-  const videosCount = statsData.videoStats[0]?.totalVideos || 0;
-  const totalViews = statsData.videoStats[0]?.totalViews || 0;
-  const subscriberCount = statsData.subscribersCount[0]?.count || 0;
-  const totalComments = statsData.commentsCount[0]?.count || 0;
-  const totalLikes = statsData.likesCount[0]?.count || 0;
+  const statsData = channelStats[0] || {};
 
   return res.status(200).json(
-      new ApiResponse(
-          200,
-          {
-              videos: videosCount,
-              totalViews,
-              subscriberCount,
-              totalComments,
-              totalLikes
-          },
-          "Channel stats retrieved successfully"
-      )
+    new ApiResponse(
+      200,
+      {
+        videos: statsData.videos || 0,
+        totalViews: statsData.totalViews || 0,
+        subscriberCount,
+        totalComments: statsData.totalComments || 0,
+        totalLikes: statsData.totalLikes || 0,
+      },
+      "Channel stats retrieved successfully"
+    )
   );
 });
 

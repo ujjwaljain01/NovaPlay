@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
 import { Video } from "../models/video.model.js";
+import { Playlist } from "../models/playlist.model.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
@@ -80,6 +81,15 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
+
+  await Playlist.create({
+    name: "Watch Later",
+    description: "Saved videos to watch later",
+    owner: user._id,
+    isSystem: true,
+    systemType: "watch_later",
+    videos: [],
+  });
 
   return res
     .status(201)
@@ -677,6 +687,21 @@ const googleAuthCallback = asyncHandler(async (req, res) => {
         username: generatedUsername,
         avatar,
       });
+
+      await Playlist.findOneAndUpdate(
+        { owner: user._id, systemType: "watch_later" },
+        {
+          $setOnInsert: {
+            name: "Watch Later",
+            description: "Saved videos to watch later",
+            owner: user._id,
+            isSystem: true,
+            systemType: "watch_later",
+            videos: [],
+          },
+        },
+        { upsert: true, new: true }
+      );
     } else if (!user.googleId) {
       if (!isEmailVerified) {
         throw new ApiError(

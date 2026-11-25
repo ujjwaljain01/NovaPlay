@@ -5,6 +5,7 @@ import {
   deletePlaylist,
   getPlaylistById,
   getUserPlaylists,
+  getWatchLaterPlaylist,
   removeVideoFromPlaylist,
   updatePlaylist,
 } from "../controllers/playlist.controller.js";
@@ -15,6 +16,7 @@ const router = Router();
 router.use(verifyJWT); // Apply verifyJWT middleware to all routes in this file
 
 router.route("/").post(createPlaylist);
+router.route("/watch-later").get(getWatchLaterPlaylist);
 
 router
   .route("/:playlistId")

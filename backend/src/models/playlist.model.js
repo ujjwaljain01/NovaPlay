@@ -21,11 +21,27 @@ const playlistSchema = new Schema(
       ref: "User",
       required: true,
     },
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
+    systemType: {
+      type: String,
+      enum: ["watch_later", null],
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 playlistSchema.index({ name: 1, owner: 1 }, { unique: true });
+playlistSchema.index(
+  { owner: 1, systemType: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { systemType: { $type: "string" } },
+  }
+);
 
 playlistSchema.index({ name: "text", description: "text" });
 playlistSchema.index({ createdAt: -1 });

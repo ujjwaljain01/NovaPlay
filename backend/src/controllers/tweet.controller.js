@@ -2,6 +2,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asynchandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Tweet } from "../models/tweet.model.js";
+import { TweetViewLog } from "../models/tweetViewLog.model.js";
+import { extractHashtags } from "../utils/hashtags.js";
 import mongoose from "mongoose";
 
 const ensureValidTweet = (id) => {
@@ -87,6 +89,7 @@ const buildTweetEnrichmentStages = (currentUserId) => [
   {
     $addFields: {
       owner: { $first: "$ownerDetails" },
+      views: { $ifNull: ["$views", 0] },
       likesCount: { $size: "$likes" },
       commentsCount: { $sum: "$commentThreads.total" },
       isLiked: currentUserId
@@ -199,10 +202,13 @@ const updateTweet = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Tweet content cannot exceed 320 characters");
   }
 
-  const updatedTweet = await Tweet.findByIdAndUpdate(
+  const updatedTweet = await Tweet.findOneAndUpdate(
     { _id: tweetId, owner: req.user?._id },
     {
-      $set: { content: trimmedContent },
+      $set: {
+        content: trimmedContent,
+        hashtags: extractHashtags(trimmedContent),
+      },
     },
     { new: true, runValidators: true }
   );
@@ -327,6 +333,76 @@ const getTweetById = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, tweet[0], "Tweet fetched successfully"));
 });
 
+const VIEW_DEDUPE_WINDOW_MS = 60 * 60 * 1000;
+
+const recordTweetView = asyncHandler(async (req, res) => {
+  const { tweetId } = req.params;
+  ensureValidTweet(tweetId);
+
+  const existingTweet = await Tweet.findById(tweetId).select("views").lean();
+  if (!existingTweet) {
+    throw new ApiError(404, "Tweet not found");
+  }
+
+  const viewerKey = req.user?._id
+    ? `user:${req.user._id}`
+    : `ip:${req.ip || req.socket?.remoteAddress || "unknown"}`;
+
+  let counted = false;
+
+  try {
+    await TweetViewLog.create({ tweetId, viewerKey });
+    counted = true;
+  } catch (error) {
+    if (error?.code !== 11000) {
+      throw error;
+    }
+
+    const cutoff = new Date(Date.now() - VIEW_DEDUPE_WINDOW_MS);
+    const refreshedLog = await TweetViewLog.findOneAndUpdate(
+      {
+        tweetId,
+        viewerKey,
+        createdAt: { $lte: cutoff },
+      },
+      { $set: { createdAt: new Date() } },
+      { new: true }
+    ).lean();
+
+    counted = Boolean(refreshedLog);
+  }
+
+  if (!counted) {
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          views: existingTweet.views ?? 0,
+          counted: false,
+        },
+        "Tweet view deduplicated"
+      )
+    );
+  }
+
+  const updatedTweet = await Tweet.findByIdAndUpdate(
+    tweetId,
+    { $inc: { views: 1 } },
+    { new: true, projection: { views: 1 } }
+  ).lean();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        views: updatedTweet?.views ?? (existingTweet.views ?? 0) + 1,
+        counted: true,
+      },
+      "Tweet view recorded successfully"
+    )
+  );
+});
+
 export {
   createTweet,
   updateTweet,
@@ -334,4 +410,5 @@ export {
   getAllTweets,
   getUserTweets,
   getTweetById,
+  recordTweetView,
 };

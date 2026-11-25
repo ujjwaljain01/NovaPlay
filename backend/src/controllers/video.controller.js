@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 import { Video } from "../models/video.model.js";
+import { Playlist } from "../models/playlist.model.js";
+import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asynchandler.js";
@@ -362,6 +364,150 @@ const updateVideoAssets = asyncHandler(async (req, res) => {
   }
 });
 
+// router.route("/my-videos").get(verifyJWT, getMyVideos)
+const getMyVideos = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Authentication required");
+  }
+
+  const ownerId = new mongoose.Types.ObjectId(req.user._id);
+
+  const videos = await Video.aggregate([
+    { $match: { owner: ownerId } },
+    { $sort: { createdAt: -1 } },
+    {
+      $lookup: {
+        from: "likes",
+        let: { videoId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$videoId"] },
+                  { $eq: ["$targetType", "Video"] },
+                ],
+              },
+            },
+          },
+          { $count: "count" },
+        ],
+        as: "likeStats",
+      },
+    },
+    {
+      $lookup: {
+        from: "comments",
+        let: { videoId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$videoId"] },
+                  { $eq: ["$targetType", "Video"] },
+                ],
+              },
+            },
+          },
+          { $count: "count" },
+        ],
+        as: "commentStats",
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        thumbnail: 1,
+        thumbnailPublicId: 1,
+        videoFile: 1,
+        duration: 1,
+        views: 1,
+        isPublished: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        likeCount: { $ifNull: [{ $first: "$likeStats.count" }, 0] },
+        commentCount: { $ifNull: [{ $first: "$commentStats.count" }, 0] },
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, videos, "Creator videos fetched successfully"));
+});
+
+// router.route("/:videoId").patch(verifyJWT, updateVideo)
+const updateVideo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+  ensureValidVideoId(videoId);
+
+  const { title, description, thumbnail, thumbnailPublicId, isPublished } =
+    req.body || {};
+
+  if (
+    title === undefined &&
+    description === undefined &&
+    thumbnail === undefined &&
+    isPublished === undefined
+  ) {
+    throw new ApiError(
+      400,
+      "Provide at least one field (title, description, thumbnail, isPublished) to update"
+    );
+  }
+
+  const video = await Video.findById(videoId);
+  if (!video) {
+    throw new ApiError(404, "Video not found");
+  }
+
+  ensureOwner(video, req.user?._id);
+
+  if (title !== undefined) {
+    if (typeof title !== "string" || title.trim() === "") {
+      throw new ApiError(400, "Title cannot be empty");
+    }
+    video.title = title.trim();
+  }
+
+  if (description !== undefined) {
+    if (typeof description !== "string" || description.trim() === "") {
+      throw new ApiError(400, "Description cannot be empty");
+    }
+    video.description = description.trim();
+  }
+
+  if (thumbnail !== undefined) {
+    if (typeof thumbnail !== "string" || thumbnail.trim() === "") {
+      throw new ApiError(400, "Thumbnail URL cannot be empty");
+    }
+    video.thumbnail = thumbnail.trim();
+    if (
+      thumbnailPublicId !== undefined &&
+      typeof thumbnailPublicId === "string" &&
+      thumbnailPublicId.trim() !== ""
+    ) {
+      video.thumbnailPublicId = thumbnailPublicId.trim();
+    }
+  }
+
+  if (isPublished !== undefined) {
+    if (typeof isPublished !== "boolean") {
+      throw new ApiError(400, "isPublished must be a boolean");
+    }
+    video.isPublished = isPublished;
+  }
+
+  await video.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "Video updated successfully"));
+});
+
 // router.route("/:id/details").patch()
 const updateVideoDetails = asyncHandler(async (req, res) => {
   ensureValidVideoId(req.params.videoId);
@@ -413,8 +559,14 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
   await video.deleteOne();
   await Promise.all([
-    deleteFromCloudinary(video.videoPublicId, "video"),
-    deleteFromCloudinary(video.thumbnailPublicId, "image"),
+    Playlist.updateMany(
+      { videos: video._id },
+      { $pull: { videos: video._id } }
+    ),
+    User.updateMany(
+      { watchHistory: video._id },
+      { $pull: { watchHistory: video._id } }
+    ),
   ]);
 
   return res
@@ -471,6 +623,8 @@ export {
   publishVideo,
   getVideoById,
   getAllVideos,
+  getMyVideos,
+  updateVideo,
   updateVideoAssets,
   updateVideoDetails,
   deleteVideo,

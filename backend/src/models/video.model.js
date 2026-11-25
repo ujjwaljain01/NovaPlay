@@ -1,5 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
+import { extractHashtags } from "../utils/hashtags.js";
 
 const videoSchema = new Schema(
   {
@@ -43,13 +44,32 @@ const videoSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    hashtags: [
+      {
+        type: String,
+        lowercase: true,
+        trim: true,
+      },
+    ],
   },
   { timestamps: true }
 );
 
+videoSchema.pre("save", async function () {
+  if (
+    this.isNew ||
+    this.isModified("title") ||
+    this.isModified("description")
+  ) {
+    this.hashtags = extractHashtags(this.title, this.description);
+  }
+});
+
 videoSchema.index({ title: "text", description: "text" });
 videoSchema.index({ isPublished: 1, createdAt: -1 });
+videoSchema.index({ hashtags: 1, isPublished: 1, createdAt: -1 });
 
 videoSchema.plugin(mongooseAggregatePaginate);
 
-export const Video = mongoose.model("Video", videoSchema);
+export const Video =
+  mongoose.models.Video || mongoose.model("Video", videoSchema);
