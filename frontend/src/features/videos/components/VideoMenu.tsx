@@ -26,15 +26,17 @@ export function VideoMenu({ videoId }: VideoMenuProps) {
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					size="icon"
-					variant="ghost"
-					className="h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/80"
-					onClick={(e) => e.stopPropagation()}
-				>
-					<DotsThreeVerticalIcon size={18} weight="bold" />
-				</Button>
+			<DropdownMenuTrigger
+				render={
+					<Button
+						size="icon"
+						variant="ghost"
+						className="h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/80"
+						onClick={(e) => e.stopPropagation()}
+					/>
+				}
+			>
+				<DotsThreeVerticalIcon size={18} weight="bold" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-lg">
 				<DropdownMenuItem onClick={handleCopy} className="cursor-pointer gap-2.5 rounded-lg py-2">

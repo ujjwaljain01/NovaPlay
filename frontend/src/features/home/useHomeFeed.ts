@@ -27,6 +27,6 @@ export function useHomeFeed() {
 		videos,
 		tweets,
 		isLoading: isVideosLoading || isTweetsLoading,
-		isError: isVideosError && isTweetsError,
+		isError: isVideosError || isTweetsError,
 	});
 }

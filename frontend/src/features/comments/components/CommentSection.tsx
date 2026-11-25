@@ -1,4 +1,5 @@
 import { ChatCircleDotsIcon } from '@phosphor-icons/react';
+import { useAuthStore } from '@/features/auth/auth.store';
 import { useComments } from '../hooks/useComments';
 import { useDeleteComment } from '../hooks/useDeleteComment';
 import { CommentInput } from './CommentInput';
@@ -7,20 +8,30 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 interface CommentSectionProps {
 	targetId: string;
+	enableReplies?: boolean;
+	totalCommentsCount?: number;
 }
 
-export function CommentSection({ targetId }: CommentSectionProps) {
-	const { data, isLoading } = useComments(targetId);
+export function CommentSection({
+	targetId,
+	enableReplies = true,
+	totalCommentsCount,
+}: CommentSectionProps) {
+	const { isAuthenticated } = useAuthStore();
+	const { data, isLoading, isError } = useComments(targetId, isAuthenticated);
 	const deleteCommentMutation = useDeleteComment(targetId);
 
 	const comments = data?.comments ?? [];
+	const displayCount = totalCommentsCount ?? comments.length;
 
 	return (
 		<section className="space-y-5">
 			{/* Header */}
 			<div className="flex items-center gap-2.5">
 				<h3 className="text-lg font-bold tracking-tight text-foreground">
-					{isLoading ? 'Comments' : `${comments.length} Comment${comments.length !== 1 ? 's' : ''}`}
+					{!isAuthenticated || isLoading
+						? 'Comments'
+						: `${displayCount} Comment${displayCount !== 1 ? 's' : ''}`}
 				</h3>
 			</div>
 
@@ -28,7 +39,14 @@ export function CommentSection({ targetId }: CommentSectionProps) {
 			<CommentInput targetId={targetId} />
 
 			{/* Comments List */}
-			{isLoading ? (
+			{!isAuthenticated ? (
+				<div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-10 text-center">
+					<ChatCircleDotsIcon size={36} className="mb-2.5 text-muted-foreground/50" />
+					<p className="text-sm font-medium text-muted-foreground">
+						Sign in to view and join the comments
+					</p>
+				</div>
+			) : isLoading ? (
 				<div className="space-y-4 pt-2">
 					{Array.from({ length: 4 }).map((_, i) => (
 						<div key={i} className="flex gap-3">
@@ -41,13 +59,28 @@ export function CommentSection({ targetId }: CommentSectionProps) {
 						</div>
 					))}
 				</div>
+			) : isError ? (
+				<div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-10 text-center">
+					<ChatCircleDotsIcon size={36} className="mb-2.5 text-muted-foreground/50" />
+					<p className="text-sm font-medium text-muted-foreground">
+						Unable to load comments right now.
+					</p>
+				</div>
 			) : comments.length > 0 ? (
 				<div className="divide-y divide-border/40">
 					{comments.map((comment) => (
 						<CommentItem
 							key={comment._id}
 							comment={comment}
-							onDelete={(id) => deleteCommentMutation.mutate(id)}
+							targetId={targetId}
+							enableReplies={enableReplies}
+							onDelete={(id, parentCommentId, repliesCount) =>
+								deleteCommentMutation.mutate({
+									commentId: id,
+									parentCommentId,
+									repliesCount,
+								})
+							}
 						/>
 					))}
 				</div>

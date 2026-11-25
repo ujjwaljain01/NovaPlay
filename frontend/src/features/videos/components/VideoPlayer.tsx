@@ -6,6 +6,11 @@ interface VideoPlayerProps {
 	title: string;
 	poster?: string;
 	onPlay?: () => void;
+	onPlaying?: () => void;
+	onPause?: () => void;
+	onWaiting?: () => void;
+	onSeeking?: () => void;
+	onSeeked?: () => void;
 	onEnded?: () => void;
 	className?: string;
 }
@@ -15,6 +20,11 @@ export function VideoPlayer({
 	title,
 	poster,
 	onPlay,
+	onPlaying,
+	onPause,
+	onWaiting,
+	onSeeking,
+	onSeeked,
 	onEnded,
 	className = '',
 }: VideoPlayerProps) {
@@ -26,6 +36,11 @@ export function VideoPlayer({
 				poster={poster}
 				playsInline
 				onPlay={onPlay}
+				onPlaying={onPlaying}
+				onPause={onPause}
+				onWaiting={onWaiting}
+				onSeeking={onSeeking}
+				onSeeked={onSeeked}
 				onEnded={onEnded}
 				className="aspect-video w-full"
 			>

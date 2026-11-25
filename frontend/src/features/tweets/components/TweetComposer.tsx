@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useCreateTweet } from '../hooks/useCreateTweet';
+import { TWEET_MAX_LENGTH } from '@/constants/tweet';
 import { Link } from 'react-router-dom';
 
 interface TweetComposerProps {
@@ -74,12 +75,12 @@ export function TweetComposer({
 						onChange={(e) => setContent(e.target.value)}
 						rows={3}
 						className="w-full resize-none border-0 bg-transparent p-0 text-sm focus-visible:ring-0 focus-visible:outline-none placeholder:text-muted-foreground/70"
-						maxLength={300}
+						maxLength={TWEET_MAX_LENGTH}
 					/>
 
 					<div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3">
 						<span className="text-xs text-muted-foreground">
-							{300 - content.length} characters left
+							{TWEET_MAX_LENGTH - content.length} characters left
 						</span>
 
 						<Button

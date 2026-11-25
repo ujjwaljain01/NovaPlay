@@ -20,7 +20,7 @@ export function SidebarSignInPrompt({ className }: { className?: string }) {
 				Sign in to like, comment, and subscribe.
 			</p>
 			<Button
-				onClick={() => navigate('/signin')}
+				onClick={() => navigate('/login')}
 				className="w-full"
 				variant="default"
 			>

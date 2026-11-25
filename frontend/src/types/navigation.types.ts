@@ -11,6 +11,7 @@ export interface NavigationItem {
 	disabled?: boolean;
 	end?: boolean; // Exact route matching
 	external?: boolean; // External links
+	isSignIn?: boolean;
 }
 
 export interface NavigationSection {

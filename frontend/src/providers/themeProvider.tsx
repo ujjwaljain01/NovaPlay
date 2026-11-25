@@ -18,12 +18,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 		updateTheme();
 
+		if (theme !== 'system') return;
+
 		const media = window.matchMedia('(prefers-color-scheme: dark)');
-
-		if (theme === 'system') {
-			media.addEventListener('change', updateTheme);
-		}
-
 		media.addEventListener('change', updateTheme);
 
 		return () => media.removeEventListener('change', updateTheme);

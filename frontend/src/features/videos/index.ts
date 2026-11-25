@@ -1,6 +1,5 @@
 export * from './api/video.api';
-export * from './hooks/useVideos';
-export * from './hooks/useVideo';
+export * from './hooks';
 export * from './queries/video.query-keys';
 export * from './transformers/video-card.transformer';
 export * from './components/VideoCard';
@@ -13,3 +12,4 @@ export * from './components/VideoSectionSkeleton';
 export * from './components/VideoGrid';
 export * from './components/VideoPlayer';
 export * from './components/VideoUploadModal';
+export * from './components/watch';

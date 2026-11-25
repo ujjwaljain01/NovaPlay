@@ -43,6 +43,7 @@ export interface Video {
 	views: number;
 
 	isPublished: boolean;
+	isLiked?: boolean;
 
 	createdAt: string;
 	updatedAt: string;
@@ -53,23 +54,9 @@ export interface Video {
 /* ----------------------------- */
 
 export interface PaginationMeta {
-	totalDocs: number;
-
-	limit: number;
-
-	page: number;
-
-	totalPages: number;
-
-	pagingCounter: number;
-
-	hasPrevPage: boolean;
+	nextCursor: string | null;
 
 	hasNextPage: boolean;
-
-	prevPage: number | null;
-
-	nextPage: number | null;
 }
 
 /* ----------------------------- */

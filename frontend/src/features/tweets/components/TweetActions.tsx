@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
 	ChatCircleIcon,
 	HeartIcon,
@@ -13,15 +14,27 @@ import { toast } from 'sonner';
 
 interface Props {
 	tweet: Tweet;
+	onCommentClick?: () => void;
 }
 
-export function TweetActions({ tweet }: Props) {
+export function TweetActions({ tweet, onCommentClick }: Props) {
+	const navigate = useNavigate();
 	const { isAuthenticated } = useAuthStore();
 	const toggleLikeMutation = useToggleTweetLike();
 
 	const [isLiked, setIsLiked] = useState(tweet.isLiked ?? false);
 	const [likesCount, setLikesCount] = useState(tweet.likesCount ?? 0);
 	const [copied, setCopied] = useState(false);
+	const [prevSyncKey, setPrevSyncKey] = useState(
+		`${tweet._id}:${tweet.isLiked ?? false}:${tweet.likesCount ?? 0}`,
+	);
+
+	const syncKey = `${tweet._id}:${tweet.isLiked ?? false}:${tweet.likesCount ?? 0}`;
+	if (syncKey !== prevSyncKey) {
+		setPrevSyncKey(syncKey);
+		setIsLiked(tweet.isLiked ?? false);
+		setLikesCount(tweet.likesCount ?? 0);
+	}
 
 	const handleLike = (e: React.MouseEvent) => {
 		e.stopPropagation();
@@ -30,16 +43,19 @@ export function TweetActions({ tweet }: Props) {
 			return;
 		}
 
-		// Optimistic update
-		const nextLiked = !isLiked;
+		// Capture previous values before optimistic update
+		const previousLiked = isLiked;
+		const previousCount = likesCount;
+		const nextLiked = !previousLiked;
+
 		setIsLiked(nextLiked);
-		setLikesCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+		setLikesCount(nextLiked ? previousCount + 1 : Math.max(0, previousCount - 1));
 
 		toggleLikeMutation.mutate(tweet._id, {
 			onError: () => {
-				// Revert on failure
-				setIsLiked(!nextLiked);
-				setLikesCount((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+				// Revert to captured previous state on failure
+				setIsLiked(previousLiked);
+				setLikesCount(previousCount);
 				toast.error('Failed to update like');
 			},
 		});
@@ -47,15 +63,25 @@ export function TweetActions({ tweet }: Props) {
 
 	const handleShare = (e: React.MouseEvent) => {
 		e.stopPropagation();
-		navigator.clipboard.writeText(`${window.location.origin}/tweets#${tweet._id}`);
+		navigator.clipboard.writeText(`${window.location.origin}/tweets/${tweet._id}`);
 		setCopied(true);
 		toast.success('Link copied to clipboard');
 		setTimeout(() => setCopied(false), 2000);
 	};
 
+	const handleComment = (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (onCommentClick) {
+			onCommentClick();
+			return;
+		}
+		navigate(`/tweets/${tweet._id}#comments`);
+	};
+
 	return (
 		<div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
 			<Button
+				type="button"
 				variant="ghost"
 				size="sm"
 				onClick={handleLike}
@@ -72,8 +98,10 @@ export function TweetActions({ tweet }: Props) {
 			</Button>
 
 			<Button
+				type="button"
 				variant="ghost"
 				size="sm"
+				onClick={handleComment}
 				className="gap-1.5 rounded-full px-2.5 text-xs text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
 			>
 				<ChatCircleIcon size={18} />
@@ -81,6 +109,7 @@ export function TweetActions({ tweet }: Props) {
 			</Button>
 
 			<Button
+				type="button"
 				variant="ghost"
 				size="sm"
 				onClick={handleShare}

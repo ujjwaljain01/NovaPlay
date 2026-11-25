@@ -25,6 +25,7 @@ export function TweetHeader({ owner, createdAt }: Props) {
 		<div className="mb-3.5 flex items-start justify-between gap-3">
 			<Link
 				to={`/channel/${username}`}
+				onClick={(e) => e.stopPropagation()}
 				className="group flex items-center gap-3 min-w-0"
 			>
 				<Avatar className="h-10 w-10 shrink-0 ring-1 ring-border/50 transition-transform duration-200 group-hover:scale-105">
@@ -48,7 +49,14 @@ export function TweetHeader({ owner, createdAt }: Props) {
 				<span className="text-[11px]">
 					{formatUploadTime(createdAt)}
 				</span>
-				<Button size="icon" variant="ghost" className="h-7 w-7 rounded-full">
+				<Button
+					type="button"
+					size="icon"
+					variant="ghost"
+					aria-label="Tweet options"
+					onClick={(e) => e.stopPropagation()}
+					className="h-7 w-7 rounded-full"
+				>
 					<DotsThreeVerticalIcon size={16} />
 				</Button>
 			</div>

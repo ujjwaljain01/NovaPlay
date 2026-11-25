@@ -1,7 +1,8 @@
 // components/Navbar.tsx
 import React, { useState } from 'react';
-import { Menu, Search, Bell, Play, Plus } from 'lucide-react';
+import { Menu, Search, Play } from 'lucide-react';
 import { MagnifyingGlassIcon } from '@phosphor-icons/react';
+import { CreateButton } from './CreateButton';
 import { UserMenu } from './UserMenu';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -73,6 +74,8 @@ export function Navbar() {
 					<div className="flex w-full transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary">
 						<Input
 							placeholder="Search"
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
 							className="h-10 rounded-r-none rounded-l bg-background "
 						/>
 						<Button
@@ -94,13 +97,7 @@ export function Navbar() {
 
 				{isAuthenticated && (
 					<div className="hidden items-center gap-2 sm:flex">
-						<button
-							className="flex items-center gap-2 rounded-r-none border border-[var(--primary)] px-4 py-2 text-sm font-semibold text-[var(--primary)] transition-all hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]"
-							title="Create"
-						>
-							<Plus className="h-4 w-4" />
-							<span>Create</span>
-						</button>
+						<CreateButton />
 					</div>
 				)}
 

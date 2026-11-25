@@ -14,6 +14,7 @@ export interface Comment {
 	likesCount?: number;
 	repliesCount?: number;
 	isLiked?: boolean;
+	isEdited?: boolean;
 }
 
 export interface GetCommentsResponse {

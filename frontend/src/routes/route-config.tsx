@@ -29,6 +29,27 @@ export const routes: RouteObject[] = [
                     return { Component: module.default };
                 },
             },
+            {
+                path: ROUTES.TWEET_WATCH,
+                lazy: async () => {
+                    const module = await import('@/pages/TweetWatchPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.CHANNEL,
+                lazy: async () => {
+                    const module = await import('@/pages/ChannelPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.SEARCH,
+                lazy: async () => {
+                    const module = await import('@/pages/SearchPage');
+                    return { Component: module.default };
+                },
+            },
         ],
     },
 
@@ -41,10 +62,62 @@ export const routes: RouteObject[] = [
             {
                 element: <AppLayout />,
                 children: [
-                    // history
-                    // playlists
-                    // upload
-                    // settings
+                    {
+                        path: ROUTES.HISTORY,
+                        lazy: async () => {
+                            const module = await import('@/pages/HistoryPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.PLAYLISTS,
+                        lazy: async () => {
+                            const module = await import('@/pages/PlaylistsPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.PLAYLIST_DETAIL,
+                        lazy: async () => {
+                            const module = await import('@/pages/PlaylistDetailPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.LIKED,
+                        lazy: async () => {
+                            const module = await import('@/pages/LikedPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.SUBSCRIPTIONS,
+                        lazy: async () => {
+                            const module = await import('@/pages/SubscriptionsPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.PROFILE,
+                        lazy: async () => {
+                            const module = await import('@/pages/ProfilePage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.SETTINGS,
+                        lazy: async () => {
+                            const module = await import('@/pages/SettingsPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.DASHBOARD,
+                        lazy: async () => {
+                            const module = await import('@/pages/DashboardPage');
+                            return { Component: module.default };
+                        },
+                    },
                 ],
             },
         ],

@@ -3,6 +3,8 @@ export const ROUTES = {
 
 	WATCH: '/watch/:videoId',
 
+	TWEET_WATCH: '/tweets/:tweetId',
+
 	LOGIN: '/login',
 
 	REGISTER: '/register',
@@ -13,6 +15,8 @@ export const ROUTES = {
 
 	PLAYLISTS: '/playlists',
 
+	PLAYLIST_DETAIL: '/playlists/:playlistId',
+
 	LIKED: '/liked',
 
 	SUBSCRIPTIONS: '/subscriptions',
@@ -20,6 +24,8 @@ export const ROUTES = {
 	PROFILE: '/profile',
 
 	SETTINGS: '/settings',
+
+	DASHBOARD: '/dashboard',
 
 	SEARCH: '/search',
     

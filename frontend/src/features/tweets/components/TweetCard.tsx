@@ -1,3 +1,5 @@
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Tweet } from '../types/tweet.types';
 import { TweetHeader } from './TweetHeader';
 import { TweetContent } from './TweetContent';
@@ -7,12 +9,47 @@ interface TweetCardProps {
 	tweet: Tweet;
 }
 
+function isInteractiveChild(target: EventTarget | null): boolean {
+	return (
+		target instanceof HTMLElement &&
+		Boolean(
+			target.closest(
+				'a, button, input, textarea, select, [role="button"], [data-no-card-nav]',
+			),
+		)
+	);
+}
+
 export function TweetCard({ tweet }: TweetCardProps) {
+	const navigate = useNavigate();
+	const tweetPath = `/tweets/${tweet._id}`;
+
+	const handleClick = (e: MouseEvent<HTMLElement>) => {
+		if (isInteractiveChild(e.target)) return;
+		navigate(tweetPath);
+	};
+
+	const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+		if (isInteractiveChild(e.target)) return;
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			navigate(tweetPath);
+		}
+	};
+
+	const authorName = tweet.owner?.fullName || tweet.owner?.username || 'user';
+
 	return (
 		<article
+			role="link"
+			tabIndex={0}
+			aria-label={`View tweet by ${authorName}`}
+			onClick={handleClick}
+			onKeyDown={handleKeyDown}
 			className="
 				group
 				flex
+				cursor-pointer
 				flex-col
 				justify-between
 				rounded-2xl
@@ -27,6 +64,9 @@ export function TweetCard({ tweet }: TweetCardProps) {
 				hover:border-primary/40
 				hover:bg-card
 				hover:shadow-md
+				focus-visible:outline-none
+				focus-visible:ring-2
+				focus-visible:ring-ring
 			"
 		>
 			<div>
