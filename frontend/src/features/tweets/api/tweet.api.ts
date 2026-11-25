@@ -1,6 +1,10 @@
-import { apiClient } from '@/api';
+import { API, apiClient } from '@/api';
 import type { ApiResponse } from '@/types/video.types';
-import type { Tweet, GetTweetsResponse } from '../types/tweet.types';
+import type {
+	Tweet,
+	GetTweetsResponse,
+	RecordTweetViewResponse,
+} from '../types/tweet.types';
 
 export interface GetTweetsParams {
 	limit?: number;
@@ -41,6 +45,16 @@ export const createTweet = async (content: string) => {
 	return data.data;
 };
 
+export const updateTweet = async (tweetId: string, content: string) => {
+	const { data } = await apiClient.patch<ApiResponse<Tweet>>(
+		`/tweets/${tweetId}`,
+		{
+			content,
+		},
+	);
+	return data.data;
+};
+
 export const deleteTweet = async (tweetId: string) => {
 	const { data } = await apiClient.delete<ApiResponse<null>>(
 		`/tweets/${tweetId}`,
@@ -49,8 +63,15 @@ export const deleteTweet = async (tweetId: string) => {
 };
 
 export const toggleTweetLike = async (tweetId: string) => {
-	const { data } = await apiClient.post<ApiResponse<any>>(
+	const { data } = await apiClient.post<ApiResponse<unknown>>(
 		`/likes/toggle/t/${tweetId}`,
+	);
+	return data.data;
+};
+
+export const recordTweetView = async (tweetId: string) => {
+	const { data } = await apiClient.post<ApiResponse<RecordTweetViewResponse>>(
+		API.tweets.recordView(tweetId),
 	);
 	return data.data;
 };

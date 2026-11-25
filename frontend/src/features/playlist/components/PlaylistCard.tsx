@@ -9,6 +9,7 @@ interface PlaylistCardProps {
 	description: Playlist['description'];
 	totalVideos: Playlist['totalVideos'];
 	firstVideoThumbnail?: Playlist['firstVideoThumbnail'];
+	isSystem?: boolean;
 	onEdit?: () => void;
 	onDelete?: () => void;
 }
@@ -19,13 +20,16 @@ export function PlaylistCard({
 	description,
 	totalVideos,
 	firstVideoThumbnail,
+	isSystem = false,
 	onEdit,
 	onDelete,
 }: PlaylistCardProps) {
+	const detailHref = isSystem ? '/playlists/watch-later' : `/playlists/${_id}`;
+
 	return (
 		<article className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] transition-colors hover:bg-[var(--video-card-hover)]">
 			<Link
-				to={`/playlists/${_id}`}
+				to={detailHref}
 				className="relative aspect-video w-full overflow-hidden bg-[var(--muted)]"
 			>
 				{firstVideoThumbnail ? (
@@ -49,7 +53,7 @@ export function PlaylistCard({
 			</Link>
 
 			<div className="flex flex-1 items-start justify-between gap-2 p-3.5">
-				<Link to={`/playlists/${_id}`} className="min-w-0 flex-1 space-y-1">
+				<Link to={detailHref} className="min-w-0 flex-1 space-y-1">
 					<h3 className="truncate text-sm font-semibold text-[var(--foreground)] transition-colors group-hover:text-[var(--primary)]">
 						{name}
 					</h3>
@@ -58,7 +62,7 @@ export function PlaylistCard({
 					</p>
 				</Link>
 
-				{onEdit || onDelete ? (
+				{!isSystem && (onEdit || onDelete) ? (
 					<div className="flex shrink-0 items-center gap-1">
 						{onEdit ? (
 							<Button

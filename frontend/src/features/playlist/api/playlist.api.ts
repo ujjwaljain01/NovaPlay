@@ -46,6 +46,13 @@ export const getPlaylistById = async (
 	return PlaylistDetailSchema.parse(data.data);
 };
 
+export const getWatchLaterPlaylist = async (): Promise<PlaylistDetail> => {
+	const { data } = await apiClient.get<ApiResponse<unknown>>(
+		API.playlist.watchLater,
+	);
+	return PlaylistDetailSchema.parse(data.data);
+};
+
 export const updatePlaylist = async (
 	playlistId: string,
 	payload: UpdatePlaylistPayload,

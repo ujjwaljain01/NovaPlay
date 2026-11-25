@@ -11,6 +11,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { HashtagText } from '@/components/common/HashtagText';
 import { formatViews } from '@/lib/format-views';
 import { formatUploadTime } from '@/lib/format-upload-time';
 import type { EnrichedVideoOwner } from '../../types/video.schemas';
@@ -117,7 +118,11 @@ export function CreatorDescriptionSection({
 
 				<div className={`relative ${expanded ? '' : 'max-h-[4.5em] overflow-hidden'}`}>
 					<p className="whitespace-pre-line break-words text-sm leading-relaxed text-foreground/85">
-						{description || 'No description provided for this video.'}
+						{description ? (
+							<HashtagText text={description} />
+						) : (
+							'No description provided for this video.'
+						)}
 					</p>
 					{!expanded && description.length > 150 && (
 						<div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-muted/40 to-transparent" />

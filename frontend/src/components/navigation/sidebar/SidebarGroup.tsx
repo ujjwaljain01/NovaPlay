@@ -1,98 +1,156 @@
-// src/components/navigation/sidebar/SidebarGroup.tsx
-import { AnimatePresence, motion } from 'motion/react';
+import { useState } from 'react';
+import { CaretDownIcon } from '@phosphor-icons/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { useSidebarCollapsed } from '@/store/sidebar.selector';
 import { useAuthStore } from '@/features/auth/auth.store';
 import type { NavigationSection } from '@/types/navigation.types';
 import { SidebarItem } from './SidebarItem';
 import { SidebarSignInPrompt } from './SidebarSignInPrompt';
+import { SidebarSubscribedChannels } from './SidebarSubscribedChannels';
 
 interface SidebarGroupProps {
 	section: NavigationSection;
+	collapsedOverride?: boolean;
+	showSubscribedChannels?: boolean;
+	showSeparator?: boolean;
 }
 
-export function SidebarGroup({ section }: SidebarGroupProps) {
-	const collapsed = useSidebarCollapsed();
-	const { isAuthenticated } = useAuthStore();
+export function SidebarGroup({
+	section,
+	collapsedOverride,
+	showSubscribedChannels = false,
+	showSeparator = true,
+}: SidebarGroupProps) {
+	const storeCollapsed = useSidebarCollapsed();
+	const collapsed = collapsedOverride ?? storeCollapsed;
+	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+	const reduceMotion = useReducedMotion();
+	const [isExploreOpen, setIsExploreOpen] = useState(true);
 
-	// Special handling for the "You" section when unauthenticated and expanded
-	if (section.id === 'you' && !isAuthenticated) {
+	if (section.id === 'explore') {
+		if (collapsed) return null;
+
 		return (
-			<motion.section layout initial={false} className="py-2">
+			<section className="py-2">
+				<div className="mb-1 px-2.5">
+					<button
+						type="button"
+						aria-expanded={isExploreOpen}
+						aria-controls="sidebar-explore-items"
+						onClick={() => setIsExploreOpen((prev) => !prev)}
+						className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-accent/60"
+					>
+						<span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+							{section.title ?? 'Explore'}
+						</span>
+						<CaretDownIcon
+							size={14}
+							className={cn(
+								'text-muted-foreground transition-transform duration-150',
+								!isExploreOpen && '-rotate-90',
+							)}
+						/>
+					</button>
+				</div>
+
 				<AnimatePresence initial={false}>
-					{!collapsed && section.title && (
+					{isExploreOpen && (
 						<motion.div
-							layout
-							initial={{ opacity: 0, y: -6 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -6 }}
-							transition={{ duration: 0.2 }}
-							className="mb-2 px-5"
+							id="sidebar-explore-items"
+							initial={
+								reduceMotion
+									? false
+									: { height: 0, opacity: 0 }
+							}
+							animate={{ height: 'auto', opacity: 1 }}
+							exit={
+								reduceMotion
+									? { opacity: 0 }
+									: { height: 0, opacity: 0 }
+							}
+							transition={
+								reduceMotion
+									? { duration: 0 }
+									: { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
+							}
+							className="space-y-0.5 overflow-hidden"
 						>
-							<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-								{section.title}
-							</h2>
+							{section.items.map((item) => (
+								<SidebarItem
+									key={item.id}
+									item={item}
+									collapsedOverride={collapsed}
+								/>
+							))}
 						</motion.div>
 					)}
 				</AnimatePresence>
 
-				{!collapsed && <SidebarSignInPrompt />}
-			</motion.section>
+				{showSeparator && (
+					<div className="mt-3 px-3">
+						<Separator />
+					</div>
+				)}
+			</section>
 		);
 	}
 
-	// Regular rendering for other sections or authenticated "You"
-	return (
-		<motion.section layout initial={false} className="py-2">
-			<AnimatePresence initial={false}>
-				{!collapsed && section.title && (
-					<motion.div
-						layout
-						initial={{ opacity: 0, y: -6 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: -6 }}
-						transition={{ duration: 0.2 }}
-						className="mb-2 px-5"
-					>
+	if (section.id === 'you' && !isAuthenticated) {
+		if (collapsed) return null;
+
+		return (
+			<section className="py-2">
+				{section.title && (
+					<div className="mb-2 px-5">
 						<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
 							{section.title}
 						</h2>
-					</motion.div>
+					</div>
 				)}
-			</AnimatePresence>
+				<SidebarSignInPrompt
+					variant="sidebar"
+					description="Sign in to view your channel, playlists, history, and Watch Later"
+				/>
+				{showSeparator && (
+					<div className="mt-3 px-3">
+						<Separator />
+					</div>
+				)}
+			</section>
+		);
+	}
 
-			<motion.div
-				layout
-				className="space-y-1"
-				initial="hidden"
-				animate="visible"
-				variants={{
-					hidden: {},
-					visible: {
-						transition: {
-							staggerChildren: 0.03,
-						},
-					},
-				}}
-			>
+	return (
+		<section className="py-2">
+			{!collapsed && section.title && (
+				<div className="mb-1.5 px-5">
+					<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+						{section.title}
+					</h2>
+				</div>
+			)}
+
+			<div className="space-y-0.5">
 				{section.items.map((item) => (
-					<motion.div
+					<SidebarItem
 						key={item.id}
-						layout
-						variants={{
-							hidden: { opacity: 0, x: -8 },
-							visible: { opacity: 1, x: 0 },
-						}}
-						transition={{ duration: 0.18 }}
-					>
-						<SidebarItem item={item} />
-					</motion.div>
+						item={item}
+						collapsedOverride={collapsed}
+					/>
 				))}
-			</motion.div>
-
-			<div className="mt-3 px-3">
-				<Separator />
 			</div>
-		</motion.section>
+
+			{section.id === 'main' && !collapsed && showSubscribedChannels && (
+				<SidebarSubscribedChannels enabled />
+			)}
+
+			{!collapsed && showSeparator && (
+				<div className="mt-3 px-3">
+					<Separator />
+				</div>
+			)}
+		</section>
 	);
 }

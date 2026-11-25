@@ -7,6 +7,7 @@ export * from './hooks/useTweet';
 export * from './hooks/useUserTweets';
 export * from './hooks/useCreateTweet';
 export * from './hooks/useToggleTweetLike';
+export * from './hooks/useTweetViewTracker';
 export * from './components/TweetCard';
 export * from './components/TweetDetailCard';
 export * from './components/TweetHeader';

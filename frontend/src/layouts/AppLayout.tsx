@@ -1,25 +1,38 @@
-// src/layouts/AppLayout.tsx
-
 import { Outlet } from 'react-router-dom';
-
 import { Navbar } from '@/components/navigation/navbar';
 import { Sidebar } from '@/components/navigation/sidebar';
-
-import { motion } from 'motion/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { FeedbackModal } from '@/features/feedback';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useSidebarShortcut } from '@/hooks/useSidebarShortcut';
+import { useSidebarCollapsed } from '@/store/sidebar.selector';
 
 export default function AppLayout() {
+	useSidebarShortcut();
+	const isMobile = useIsMobile();
+	const collapsed = useSidebarCollapsed();
+
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="flex min-h-screen flex-col bg-background">
 			<TooltipProvider>
 				<Navbar />
-				<motion.div layout className="flex flex-1 overflow-hidden">
+				<div className="flex min-w-0 flex-1">
 					<Sidebar />
 
-					<motion.main layout className="flex-1 overflow-y-auto">
+					<main
+						data-sidebar-state={
+							isMobile
+								? 'drawer'
+								: collapsed
+									? 'collapsed'
+									: 'expanded'
+						}
+						className="min-w-0 flex-1 overflow-x-hidden"
+					>
 						<Outlet />
-					</motion.main>
-				</motion.div>
+					</main>
+				</div>
+				<FeedbackModal />
 			</TooltipProvider>
 		</div>
 	);

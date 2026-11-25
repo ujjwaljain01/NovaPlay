@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Tweet } from '../types/tweet.types';
+import { useTweetViewTracker } from '../hooks/useTweetViewTracker';
 import { TweetHeader } from './TweetHeader';
 import { TweetContent } from './TweetContent';
 import { TweetActions } from './TweetActions';
@@ -23,6 +24,10 @@ function isInteractiveChild(target: EventTarget | null): boolean {
 export function TweetCard({ tweet }: TweetCardProps) {
 	const navigate = useNavigate();
 	const tweetPath = `/tweets/${tweet._id}`;
+	const { ref: viewTrackerRef, displayViews } = useTweetViewTracker({
+		tweetId: tweet._id,
+		initialViews: tweet.views ?? 0,
+	});
 
 	const handleClick = (e: MouseEvent<HTMLElement>) => {
 		if (isInteractiveChild(e.target)) return;
@@ -41,6 +46,7 @@ export function TweetCard({ tweet }: TweetCardProps) {
 
 	return (
 		<article
+			ref={viewTrackerRef}
 			role="link"
 			tabIndex={0}
 			aria-label={`View tweet by ${authorName}`}
@@ -74,7 +80,7 @@ export function TweetCard({ tweet }: TweetCardProps) {
 				<TweetContent content={tweet.content} />
 			</div>
 
-			<TweetActions tweet={tweet} />
+			<TweetActions tweet={tweet} views={displayViews} />
 		</article>
 	);
 }

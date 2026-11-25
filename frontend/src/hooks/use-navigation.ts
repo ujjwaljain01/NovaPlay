@@ -1,10 +1,13 @@
-// hooks/useNavigation.ts
-
+import { useMemo } from 'react';
 import { useAuthStore } from '@/features/auth/auth.store';
-import { authenticatedNavigation, guestNavigation } from '@/data/navigation';
+import { buildNavigationSections } from '@/data/navigation';
 
 export function useNavigation() {
 	const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+	const username = useAuthStore((state) => state.user?.username);
 
-	return isAuthenticated ? authenticatedNavigation : guestNavigation;
+	return useMemo(
+		() => buildNavigationSections({ isAuthenticated, username }),
+		[isAuthenticated, username],
+	);
 }

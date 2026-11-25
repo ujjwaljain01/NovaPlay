@@ -9,11 +9,18 @@ export interface Tweet {
 	_id: string;
 	content: string;
 	owner: TweetOwner;
+	views?: number;
+	hashtags?: string[];
 	likesCount?: number;
 	commentsCount?: number;
 	createdAt: string;
 	updatedAt?: string;
 	isLiked?: boolean;
+}
+
+export interface RecordTweetViewResponse {
+	views: number;
+	counted: boolean;
 }
 
 export interface GetTweetsResponse {

@@ -17,12 +17,18 @@ import type {
 export default function SearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const q = searchParams.get('q') ?? '';
+	const tag = searchParams.get('tag') ?? '';
 	const type = (searchParams.get('type') as SearchType) || 'all';
 	const date = (searchParams.get('date') as SearchDate) || 'anytime';
 	const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
 
+	const normalizedTag = tag.trim().replace(/^#+/, '');
+	const hasSearchCriteria = q.trim().length > 0 || normalizedTag.length > 0;
+	const displayTerm = normalizedTag ? `#${normalizedTag}` : q.trim();
+
 	const { data, isLoading, isError, error } = useSearchResults({
 		q,
+		tag: normalizedTag || undefined,
 		type,
 		date,
 		page,
@@ -47,9 +53,9 @@ export default function SearchPage() {
 			<div className="mx-auto max-w-5xl space-y-6 px-4 py-6 lg:px-6">
 				<header className="space-y-1">
 					<h1 className="text-2xl font-bold text-[var(--foreground)]">
-						{q.trim() ? `Results for "${q}"` : 'Search'}
+						{displayTerm ? `Results for "${displayTerm}"` : 'Search'}
 					</h1>
-					{data ? (
+					{data && hasSearchCriteria ? (
 						<p className="text-sm text-[var(--muted-foreground)]">
 							{data.totalResults}{' '}
 							{data.totalResults === 1 ? 'result' : 'results'} found
@@ -59,7 +65,7 @@ export default function SearchPage() {
 
 				<SearchFilters />
 
-				{!q.trim() ? (
+				{!hasSearchCriteria ? (
 					<EmptyState
 						icon={<MagnifyingGlassIcon size={40} />}
 						title="Enter a search query"
@@ -81,7 +87,7 @@ export default function SearchPage() {
 					<EmptyState
 						icon={<MagnifyingGlassIcon size={40} />}
 						title="No results found"
-						description={`No matches found for "${q}". Try adjusting your filters.`}
+						description={`No matches found for "${displayTerm}". Try adjusting your filters.`}
 					/>
 				) : (
 					<>

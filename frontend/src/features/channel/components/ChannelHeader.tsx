@@ -1,7 +1,9 @@
-import { CheckIcon, UserPlusIcon } from '@phosphor-icons/react';
+import { Link } from 'react-router-dom';
+import { CheckIcon, UserPlusIcon, VideoCameraIcon } from '@phosphor-icons/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ROUTES } from '@/routes/route-paths';
 import type { ChannelProfile } from '../types/channel.schemas';
 
 interface ChannelHeaderProps {
@@ -102,7 +104,18 @@ export function ChannelHeader({
 							</>
 						)}
 					</Button>
-				) : null}
+				) : (
+					<Link to={ROUTES.STUDIO_VIDEOS}>
+						<Button
+							size="sm"
+							variant="outline"
+							className="gap-1.5 rounded-full border-[var(--border)] px-5 text-xs font-semibold"
+						>
+							<VideoCameraIcon size={15} />
+							<span>Manage Videos</span>
+						</Button>
+					</Link>
+				)}
 			</div>
 		</section>
 	);

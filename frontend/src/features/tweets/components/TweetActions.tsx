@@ -5,8 +5,10 @@ import {
 	HeartIcon,
 	ShareNetworkIcon,
 	CheckIcon,
+	EyeIcon,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
+import { formatViews } from '@/lib/format-views';
 import type { Tweet } from '../types/tweet.types';
 import { useToggleTweetLike } from '../hooks/useToggleTweetLike';
 import { useAuthStore } from '@/features/auth/auth.store';
@@ -14,10 +16,11 @@ import { toast } from 'sonner';
 
 interface Props {
 	tweet: Tweet;
+	views?: number;
 	onCommentClick?: () => void;
 }
 
-export function TweetActions({ tweet, onCommentClick }: Props) {
+export function TweetActions({ tweet, views, onCommentClick }: Props) {
 	const navigate = useNavigate();
 	const { isAuthenticated } = useAuthStore();
 	const toggleLikeMutation = useToggleTweetLike();
@@ -107,6 +110,15 @@ export function TweetActions({ tweet, onCommentClick }: Props) {
 				<ChatCircleIcon size={18} />
 				<span>{tweet.commentsCount ?? 0}</span>
 			</Button>
+
+			<span
+				aria-label={`${views ?? tweet.views ?? 0} views`}
+				title={`${(views ?? tweet.views ?? 0).toLocaleString()} views`}
+				className="inline-flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground"
+			>
+				<EyeIcon size={17} />
+				<span>{formatViews(views ?? tweet.views ?? 0)}</span>
+			</span>
 
 			<Button
 				type="button"

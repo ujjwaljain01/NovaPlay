@@ -6,10 +6,13 @@ import {
 import { searchQueryKeys } from '../queries/search.query-keys';
 
 export function useSearchResults(params: SearchContentParams) {
+	const hasQuery = params.q.trim().length > 0;
+	const hasTag = (params.tag?.trim().length ?? 0) > 0;
+
 	return useQuery({
 		queryKey: searchQueryKeys.results({ ...params }),
 		queryFn: () => searchContent(params),
-		enabled: params.q.trim().length > 0,
+		enabled: hasQuery || hasTag,
 		placeholderData: (previousData) => previousData,
 		staleTime: 1000 * 60 * 2,
 	});

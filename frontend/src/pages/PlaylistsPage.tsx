@@ -89,8 +89,17 @@ export default function PlaylistsPage() {
 								description={playlist.description}
 								totalVideos={playlist.totalVideos}
 								firstVideoThumbnail={playlist.firstVideoThumbnail}
-								onEdit={() => setEditingPlaylist(playlist)}
-								onDelete={() => setDeletingPlaylist(playlist)}
+								isSystem={playlist.isSystem}
+								onEdit={
+									playlist.isSystem
+										? undefined
+										: () => setEditingPlaylist(playlist)
+								}
+								onDelete={
+									playlist.isSystem
+										? undefined
+										: () => setDeletingPlaylist(playlist)
+								}
 							/>
 						))}
 					</div>

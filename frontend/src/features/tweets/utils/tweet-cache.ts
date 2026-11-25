@@ -65,3 +65,54 @@ export function invalidateTweetCommentCounts(
 		queryKey: [...tweetQueryKeys.all, 'user'],
 	});
 }
+
+function patchTweetViews(tweet: Tweet, tweetId: string, views: number): Tweet {
+	if (tweet._id !== tweetId) return tweet;
+	return {
+		...tweet,
+		views,
+	};
+}
+
+export function setTweetViewsInCache(
+	queryClient: QueryClient,
+	tweetId: string,
+	views: number,
+) {
+	if (!tweetId || typeof views !== 'number') return;
+
+	queryClient.setQueryData<Tweet>(tweetQueryKeys.detail(tweetId), (old) => {
+		if (!old) return old;
+		return patchTweetViews(old, tweetId, views);
+	});
+
+	queryClient.setQueriesData<GetTweetsResponse>(
+		{ queryKey: tweetQueryKeys.lists() },
+		(old) => {
+			if (!old?.docs) return old;
+			return {
+				...old,
+				docs: old.docs.map((tweet) => patchTweetViews(tweet, tweetId, views)),
+			};
+		},
+	);
+
+	queryClient.setQueriesData<Tweet[] | { tweets?: Tweet[] }>(
+		{ queryKey: [...tweetQueryKeys.all, 'user'] },
+		(old) => {
+			if (!old) return old;
+			if (Array.isArray(old)) {
+				return old.map((tweet) => patchTweetViews(tweet, tweetId, views));
+			}
+			if (Array.isArray(old.tweets)) {
+				return {
+					...old,
+					tweets: old.tweets.map((tweet) =>
+						patchTweetViews(tweet, tweetId, views),
+					),
+				};
+			}
+			return old;
+		},
+	);
+}

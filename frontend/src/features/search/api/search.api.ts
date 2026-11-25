@@ -8,6 +8,7 @@ import {
 
 export interface SearchContentParams {
 	q: string;
+	tag?: string;
 	type?: SearchType;
 	date?: SearchDate;
 	page?: number;

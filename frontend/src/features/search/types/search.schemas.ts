@@ -28,6 +28,7 @@ export const SearchTweetResultSchema = z.object({
 	contentType: z.literal('tweet'),
 	_id: z.string(),
 	content: z.string(),
+	views: z.number().optional().default(0),
 	createdAt: z.string(),
 	updatedAt: z.string().optional(),
 	owner: SearchOwnerSchema,

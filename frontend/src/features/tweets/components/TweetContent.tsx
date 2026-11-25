@@ -1,3 +1,5 @@
+import { HashtagText } from '@/components/common/HashtagText';
+
 interface Props {
 	content: string;
 }
@@ -5,7 +7,7 @@ interface Props {
 export function TweetContent({ content }: Props) {
 	return (
 		<p className="line-clamp-6 text-sm leading-relaxed text-foreground/90 whitespace-pre-line break-words">
-			{content}
+			<HashtagText text={content} />
 		</p>
 	);
 }

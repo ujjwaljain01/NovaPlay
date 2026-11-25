@@ -13,6 +13,7 @@ export const API = {
 
 	videos: {
 		all: '/videos',
+		myVideos: '/videos/my-videos',
 		byId: (id: string) => `/videos/${id}`,
 		incrementViews: (id: string) => `/videos/${id}/increment-views`,
 		togglePublish: (id: string) => `/videos/${id}/toggle-publish`,
@@ -22,6 +23,7 @@ export const API = {
 	tweets: {
 		all: '/tweets',
 		byId: (id: string) => `/tweets/${id}`,
+		recordView: (id: string) => `/tweets/${id}/view`,
 	},
 
 	comments: {
@@ -43,6 +45,7 @@ export const API = {
 
 	playlist: {
 		create: '/playlist',
+		watchLater: '/playlist/watch-later',
 		list: (userId: string) => `/playlist/user/${userId}`,
 		detail: (playlistId: string) => `/playlist/${playlistId}`,
 		update: (playlistId: string) => `/playlist/${playlistId}`,
@@ -64,14 +67,24 @@ export const API = {
 	subscriptions: {
 		list: (channelId: string) => `/subscriptions/c/${channelId}`,
 		toggle: (channelId: string) => `/subscriptions/c/${channelId}`,
+		channels: '/subscriptions/channels',
+		feed: '/subscriptions/feed',
 	},
 
 	search: {
 		query: '/search',
 	},
 
+	explore: {
+		byCategory: (category: string) => `/explore/${category}`,
+	},
+
 	dashboard: {
 		stats: '/dashboard/stats',
 		videos: '/dashboard/videos',
+	},
+
+	feedback: {
+		submit: '/feedback',
 	},
 };

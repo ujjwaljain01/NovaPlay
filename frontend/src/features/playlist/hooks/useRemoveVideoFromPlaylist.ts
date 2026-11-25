@@ -17,11 +17,19 @@ export function useRemoveVideoFromPlaylist() {
 			removeVideoFromPlaylist(videoId, playlistId),
 
 		onMutate: async ({ videoId, playlistId }) => {
-			await queryClient.cancelQueries({
-				queryKey: playlistQueryKeys.detail(playlistId),
-			});
+			await Promise.all([
+				queryClient.cancelQueries({
+					queryKey: playlistQueryKeys.detail(playlistId),
+				}),
+				queryClient.cancelQueries({
+					queryKey: playlistQueryKeys.watchLater(),
+				}),
+			]);
 			const previousDetail = queryClient.getQueryData<PlaylistDetail>(
 				playlistQueryKeys.detail(playlistId),
+			);
+			const previousWatchLater = queryClient.getQueryData<PlaylistDetail>(
+				playlistQueryKeys.watchLater(),
 			);
 
 			if (previousDetail) {
@@ -34,7 +42,17 @@ export function useRemoveVideoFromPlaylist() {
 				);
 			}
 
-			return { previousDetail, playlistId };
+			if (previousWatchLater && previousWatchLater._id === playlistId) {
+				queryClient.setQueryData<PlaylistDetail>(
+					playlistQueryKeys.watchLater(),
+					{
+						...previousWatchLater,
+						videos: previousWatchLater.videos.filter((v) => v._id !== videoId),
+					},
+				);
+			}
+
+			return { previousDetail, previousWatchLater, playlistId };
 		},
 
 		onSuccess: () => {
@@ -48,6 +66,12 @@ export function useRemoveVideoFromPlaylist() {
 					context.previousDetail,
 				);
 			}
+			if (context?.previousWatchLater) {
+				queryClient.setQueryData(
+					playlistQueryKeys.watchLater(),
+					context.previousWatchLater,
+				);
+			}
 			toast.error(err.message || 'Failed to remove video from playlist');
 		},
 
@@ -55,6 +79,9 @@ export function useRemoveVideoFromPlaylist() {
 			queryClient.invalidateQueries({ queryKey: playlistQueryKeys.lists() });
 			queryClient.invalidateQueries({
 				queryKey: playlistQueryKeys.detail(playlistId),
+			});
+			queryClient.invalidateQueries({
+				queryKey: playlistQueryKeys.watchLater(),
 			});
 		},
 	});

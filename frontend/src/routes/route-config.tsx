@@ -23,6 +23,27 @@ export const routes: RouteObject[] = [
                 },
             },
             {
+                path: ROUTES.VIDEOS,
+                lazy: async () => {
+                    const module = await import('@/pages/VideosPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.TWEETS,
+                lazy: async () => {
+                    const module = await import('@/pages/TweetsPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.SUBSCRIPTIONS,
+                lazy: async () => {
+                    const module = await import('@/pages/SubscriptionsPage');
+                    return { Component: module.default };
+                },
+            },
+            {
                 path: ROUTES.WATCH,
                 lazy: async () => {
                     const module = await import('@/pages/WatchPage');
@@ -47,6 +68,34 @@ export const routes: RouteObject[] = [
                 path: ROUTES.SEARCH,
                 lazy: async () => {
                     const module = await import('@/pages/SearchPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.EXPLORE,
+                lazy: async () => {
+                    const module = await import('@/pages/ExplorePage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.SETTINGS,
+                lazy: async () => {
+                    const module = await import('@/pages/SettingsPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.HELP,
+                lazy: async () => {
+                    const module = await import('@/pages/HelpPage');
+                    return { Component: module.default };
+                },
+            },
+            {
+                path: ROUTES.HANDLE_CHANNEL,
+                lazy: async () => {
+                    const module = await import('@/pages/HandleChannelPage');
                     return { Component: module.default };
                 },
             },
@@ -77,6 +126,20 @@ export const routes: RouteObject[] = [
                         },
                     },
                     {
+                        path: ROUTES.WATCH_LATER,
+                        lazy: async () => {
+                            const module = await import('@/pages/WatchLaterPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
+                        path: ROUTES.WATCH_LATER_ALIAS,
+                        lazy: async () => {
+                            const module = await import('@/pages/WatchLaterPage');
+                            return { Component: module.default };
+                        },
+                    },
+                    {
                         path: ROUTES.PLAYLIST_DETAIL,
                         lazy: async () => {
                             const module = await import('@/pages/PlaylistDetailPage');
@@ -91,9 +154,9 @@ export const routes: RouteObject[] = [
                         },
                     },
                     {
-                        path: ROUTES.SUBSCRIPTIONS,
+                        path: ROUTES.LIKED_ALIAS,
                         lazy: async () => {
-                            const module = await import('@/pages/SubscriptionsPage');
+                            const module = await import('@/pages/LikedPage');
                             return { Component: module.default };
                         },
                     },
@@ -105,16 +168,16 @@ export const routes: RouteObject[] = [
                         },
                     },
                     {
-                        path: ROUTES.SETTINGS,
+                        path: ROUTES.STUDIO,
                         lazy: async () => {
-                            const module = await import('@/pages/SettingsPage');
+                            const module = await import('@/pages/StudioPage');
                             return { Component: module.default };
                         },
                     },
                     {
-                        path: ROUTES.DASHBOARD,
+                        path: ROUTES.STUDIO_VIDEOS,
                         lazy: async () => {
-                            const module = await import('@/pages/DashboardPage');
+                            const module = await import('@/pages/StudioPage');
                             return { Component: module.default };
                         },
                     },

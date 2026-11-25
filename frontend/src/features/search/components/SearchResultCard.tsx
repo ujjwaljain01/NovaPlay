@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PlaylistIcon } from '@phosphor-icons/react';
+import { HashtagText } from '@/components/common/HashtagText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/format-duration';
 import { formatUploadTime } from '@/lib/format-upload-time';
@@ -123,13 +124,18 @@ export function SearchResultCard({ result }: SearchResultCardProps) {
 						{result.owner.fullName}
 					</Link>
 					<p className="text-xs text-[var(--muted-foreground)]">
-						@{result.owner.username} • {formatUploadTime(result.createdAt)}
+						@{result.owner.username} • {formatUploadTime(result.createdAt)} •{' '}
+						{formatViews(result.views ?? 0)}{' '}
+						{(result.views ?? 0) === 1 ? 'view' : 'views'}
 					</p>
 				</div>
 			</div>
-			<p className="mt-2.5 whitespace-pre-line text-sm text-[var(--foreground)]">
-				{result.content}
-			</p>
+			<Link
+				to={`/tweets/${result._id}`}
+				className="mt-2.5 block whitespace-pre-line text-sm text-[var(--foreground)] hover:text-[var(--foreground)]"
+			>
+				<HashtagText text={result.content} />
+			</Link>
 		</article>
 	);
 }

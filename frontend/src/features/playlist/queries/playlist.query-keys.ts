@@ -9,4 +9,6 @@ export const playlistQueryKeys = {
 
 	detail: (playlistId: string) =>
 		[...playlistQueryKeys.details(), playlistId] as const,
+
+	watchLater: () => [...playlistQueryKeys.all, 'watch-later'] as const,
 };

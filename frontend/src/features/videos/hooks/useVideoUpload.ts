@@ -9,6 +9,7 @@ import {
 	uploadBinaryToR2,
 } from '../api/video.api';
 import { videoQueryKeys } from '../queries/video.query-keys';
+import { studioQueryKeys } from '@/features/studio/queries/studio.query-keys';
 import type { VideoUploadFormValues } from '../validation/video-upload.schema';
 import type { Video } from '@/types/video.types';
 
@@ -232,6 +233,7 @@ export function useVideoUpload() {
 			setProgress(100);
 			setStage('success');
 			void queryClient.invalidateQueries({ queryKey: videoQueryKeys.all });
+			void queryClient.invalidateQueries({ queryKey: studioQueryKeys.all });
 			toast.success('Video published successfully!');
 		},
 		onError: (error: unknown) => {

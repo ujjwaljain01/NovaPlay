@@ -15,6 +15,7 @@ import {
 import { useToggleSubscription } from '@/features/subscriptions/hooks/useToggleSubscription';
 import { CommentSection } from '@/features/comments/components/CommentSection';
 import { useAuthStore } from '@/features/auth/auth.store';
+import { usePlaybackSettingsStore } from '@/store/playback-settings.store';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
@@ -22,6 +23,7 @@ export default function WatchPage() {
 	const { videoId } = useParams<{ videoId: string }>();
 	const navigate = useNavigate();
 	const { user, isAuthenticated } = useAuthStore();
+	const autoplay = usePlaybackSettingsStore((s) => s.autoplay);
 
 	const { data: video, isLoading, isError, refetch } = useVideo(videoId ?? '');
 	const likeMutation = useVideoLike(video?._id ?? '');
@@ -99,6 +101,7 @@ export default function WatchPage() {
 						src={video.videoFile}
 						title={video.title}
 						poster={video.thumbnail}
+						autoPlay={autoplay}
 						onPlay={playbackHandlers.onPlay}
 						onPlaying={playbackHandlers.onPlaying}
 						onPause={playbackHandlers.onPause}

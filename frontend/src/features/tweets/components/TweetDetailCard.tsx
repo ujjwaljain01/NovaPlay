@@ -1,5 +1,8 @@
 import { format } from 'date-fns';
+import { HashtagText } from '@/components/common/HashtagText';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatViews } from '@/lib/format-views';
+import { useTweetViewTracker } from '../hooks/useTweetViewTracker';
 import type { Tweet } from '../types/tweet.types';
 import { TweetActions } from './TweetActions';
 import { TweetHeader } from './TweetHeader';
@@ -22,17 +25,30 @@ export function TweetDetailCard({
 	const fullTimestamp = formatFullTimestamp(tweet.createdAt);
 	const likesCount = tweet.likesCount ?? 0;
 	const commentsCount = tweet.commentsCount ?? 0;
+	const { ref: viewTrackerRef, displayViews } = useTweetViewTracker({
+		tweetId: tweet._id,
+		initialViews: tweet.views ?? 0,
+	});
 
 	return (
-		<article className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm">
+		<article
+			ref={viewTrackerRef}
+			className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm"
+		>
 			<TweetHeader owner={tweet.owner} createdAt={tweet.createdAt} />
 
 			<p className="mt-2 whitespace-pre-line break-words text-base leading-relaxed text-[var(--foreground)] sm:text-[17px]">
-				{tweet.content}
+				<HashtagText text={tweet.content} />
 			</p>
 
 			<div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
 				{fullTimestamp ? <span>{fullTimestamp}</span> : null}
+				<span>
+					<strong className="font-semibold text-[var(--foreground)]">
+						{formatViews(displayViews)}
+					</strong>{' '}
+					{displayViews === 1 ? 'View' : 'Views'}
+				</span>
 				<span>
 					<strong className="font-semibold text-[var(--foreground)]">
 						{likesCount}
@@ -47,7 +63,11 @@ export function TweetDetailCard({
 				</span>
 			</div>
 
-			<TweetActions tweet={tweet} onCommentClick={onCommentClick} />
+			<TweetActions
+				tweet={tweet}
+				views={displayViews}
+				onCommentClick={onCommentClick}
+			/>
 		</article>
 	);
 }

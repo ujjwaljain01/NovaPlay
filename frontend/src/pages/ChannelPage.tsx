@@ -28,7 +28,12 @@ import { VideoCardSkeleton } from '@/features/videos/components/VideoCardSkeleto
 import { ROUTES } from '@/routes/route-paths';
 
 export default function ChannelPage() {
-	const { username = '' } = useParams<{ username: string }>();
+	const { username: routeUsername, handle } = useParams<{
+		username?: string;
+		handle?: string;
+	}>();
+	const username =
+		routeUsername ?? (handle?.startsWith('@') ? handle.slice(1) : '');
 	const navigate = useNavigate();
 	const { user, isAuthenticated } = useAuthStore();
 	const [activeTab, setActiveTab] = useState<ChannelTab>('videos');

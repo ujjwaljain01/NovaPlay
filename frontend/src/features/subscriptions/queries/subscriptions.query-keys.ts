@@ -5,4 +5,8 @@ export const subscriptionsQueryKeys = {
 
 	list: (userId: string) =>
 		[...subscriptionsQueryKeys.lists(), userId] as const,
+
+	channels: () => [...subscriptionsQueryKeys.all, 'channels'] as const,
+
+	feed: () => [...subscriptionsQueryKeys.all, 'feed'] as const,
 };

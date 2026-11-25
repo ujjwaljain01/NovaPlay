@@ -2,10 +2,13 @@
 
 import type { Icon } from '@phosphor-icons/react';
 
+export type NavigationAction = 'feedback';
+
 export interface NavigationItem {
 	id: string;
 	label: string;
-	href: string;
+	href?: string;
+	action?: NavigationAction;
 	icon: Icon;
 	badge?: string | number;
 	disabled?: boolean;

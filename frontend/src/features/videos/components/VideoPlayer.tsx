@@ -5,6 +5,7 @@ interface VideoPlayerProps {
 	src: string;
 	title: string;
 	poster?: string;
+	autoPlay?: boolean;
 	onPlay?: () => void;
 	onPlaying?: () => void;
 	onPause?: () => void;
@@ -19,6 +20,7 @@ export function VideoPlayer({
 	src,
 	title,
 	poster,
+	autoPlay = false,
 	onPlay,
 	onPlaying,
 	onPause,
@@ -34,6 +36,7 @@ export function VideoPlayer({
 				title={title}
 				src={src}
 				poster={poster}
+				autoPlay={autoPlay}
 				playsInline
 				onPlay={onPlay}
 				onPlaying={onPlaying}
