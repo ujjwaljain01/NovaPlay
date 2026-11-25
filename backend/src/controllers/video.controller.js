@@ -3,14 +3,6 @@ import { Video } from "../models/video.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asynchandler.js";
-import {
-  deleteFromCloudinary,
-  uploadLargeOnCloudinary,
-  uploadOnCloudinary,
-} from "../utils/cloudinary.js";
-import Ffmpeg from "fluent-ffmpeg";
-import ffprobeInstaller from "@ffprobe-installer/ffprobe";
-import fs from "fs";
 
 const ensureValidVideoId = (id) => {
   if (!mongoose.isValidObjectId(id)) {
@@ -24,34 +16,18 @@ const ensureOwner = (video, userId) => {
   }
 };
 
-const getVideoDuration = (localfilePath) => {
-  return new Promise((resolve, reject) => {
-    Ffmpeg.setFfprobePath(ffprobeInstaller.path);
-    Ffmpeg.ffprobe(localfilePath, (err, metadata) => {
-      if (err) return reject(err);
-
-      const duration = metadata?.format?.duration;
-
-      if (!duration) {
-        return reject(new Error("could not read duration metadata from file"));
-      }
-
-      resolve(duration);
-    });
-  });
-};
-
-const cleanupUpload = async (upload, resourceType) => {
-  if (upload?.public_id) {
-    await deleteFromCloudinary(upload.public_id, resourceType);
-  }
-};
-
-// router.route("/").post(verifyJWT, upload.fields([{name:"video",maxCount:1},{name:"thumbnail",maxCount:1}]), publishVideo)
+// router.route("/").post(verifyJWT, publishVideo)
+// Reads from req.body — files are uploaded to R2 by the client before this call.
 const publishVideo = asyncHandler(async (req, res) => {
-  const { title, description } = req.body || {};
-  const videoFile = req.files?.video?.[0];
-  const thumbnailFile = req.files?.thumbnail?.[0];
+  const {
+    title,
+    description,
+    videoFile,
+    videoPublicId,
+    thumbnail,
+    thumbnailPublicId,
+    duration,
+  } = req.body || {};
 
   if (
     typeof title !== "string" ||
@@ -62,67 +38,150 @@ const publishVideo = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Title and description are required");
   }
 
-  if (!videoFile || !thumbnailFile) {
-    throw new ApiError(400, "Video and thumbnail files are required");
+  if (!videoFile || !thumbnail) {
+    throw new ApiError(400, "videoFile and thumbnail URLs are required");
   }
 
-  const duration = await getVideoDuration(videoFile.path);
-
-  if (!duration) {
-    throw new ApiError(400, "Could not read video duration");
+  if (!videoPublicId || !thumbnailPublicId) {
+    throw new ApiError(400, "videoPublicId and thumbnailPublicId are required");
   }
 
-  const [videoResult, thumbnailResult] = await Promise.allSettled([
-    uploadLargeOnCloudinary(videoFile.path, "video"),
-    uploadOnCloudinary(thumbnailFile.path, "thumbnail"),
-  ]);
-
-  if (
-    videoResult.status === "rejected" ||
-    thumbnailResult.status === "rejected"
-  ) {
-    if (videoResult.status === "fulfilled") {
-      await cleanupUpload(videoResult.value, "video");
-    }
-    if (thumbnailResult.status === "fulfilled") {
-      await cleanupUpload(thumbnailResult.value, "image");
-    }
-    throw new ApiError(500, "Failed to upload video assets");
+  const parsedDuration = Number(duration);
+  if (!parsedDuration || parsedDuration <= 0) {
+    throw new ApiError(400, "A valid duration is required");
   }
 
-  const uploadedVideo = videoResult.value;
-  const uploadedThumbnail = thumbnailResult.value;
+  const video = await Video.create({
+    videoFile,
+    videoPublicId,
+    thumbnail,
+    thumbnailPublicId,
+    owner: req.user._id,
+    title: title.trim(),
+    description: description.trim(),
+    duration: parsedDuration,
+  });
 
-  try {
-    const video = await Video.create({
-      videoFile: uploadedVideo.secure_url,
-      videoPublicId: uploadedVideo.public_id,
-      thumbnail: uploadedThumbnail.secure_url,
-      thumbnailPublicId: uploadedThumbnail.public_id,
-      owner: req.user._id,
-      title: title.trim(),
-      description: description.trim(),
-      duration: duration,
-    });
-
-    return res
-      .status(201)
-      .json(new ApiResponse(201, video, "Video published successfully"));
-  } catch (error) {
-    await Promise.all([
-      cleanupUpload(uploadedVideo, "video"),
-      cleanupUpload(uploadedThumbnail, "image"),
-    ]);
-    throw new ApiError(500, "Failed to publish video", error.message);
-  }
+  return res
+    .status(201)
+    .json(new ApiResponse(201, video, "Video published successfully"));
 });
 
-// router.route("/:id").get(getVideoById)
+// router.route("/:id").get(optionalVerifyJWT, getVideoById)
 const getVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   ensureValidVideoId(videoId);
 
-  const video = await Video.findById(videoId);
+  const videoObjectId = new mongoose.Types.ObjectId(videoId);
+  const viewerId = req.user?._id
+    ? new mongoose.Types.ObjectId(req.user._id)
+    : null;
+
+  const [video] = await Video.aggregate([
+    {
+      $match: { _id: videoObjectId },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "owner",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              username: 1,
+              fullName: 1,
+              avatar: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$owner",
+    },
+    {
+      $lookup: {
+        from: "likes",
+        let: { videoId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$videoId"] },
+                  { $eq: ["$targetType", "Video"] },
+                ],
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              likeCount: { $sum: 1 },
+              isLiked: {
+                $max: viewerId
+                  ? { $cond: [{ $eq: ["$likedBy", viewerId] }, 1, 0] }
+                  : 0,
+              },
+            },
+          },
+        ],
+        as: "likeStats",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        let: { channelId: "$owner._id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$channel", "$$channelId"] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              subscribersCount: { $sum: 1 },
+              isSubscribed: {
+                $max: viewerId
+                  ? { $cond: [{ $eq: ["$subscriber", viewerId] }, 1, 0] }
+                  : 0,
+              },
+            },
+          },
+        ],
+        as: "subscriptionStats",
+      },
+    },
+    {
+      $addFields: {
+        likeCount: { $ifNull: [{ $first: "$likeStats.likeCount" }, 0] },
+        isLiked: {
+          $eq: [{ $ifNull: [{ $first: "$likeStats.isLiked" }, 0] }, 1],
+        },
+        isSubscribed: {
+          $eq: [
+            { $ifNull: [{ $first: "$subscriptionStats.isSubscribed" }, 0] },
+            1,
+          ],
+        },
+        "owner.subscribersCount": {
+          $ifNull: [{ $first: "$subscriptionStats.subscribersCount" }, 0],
+        },
+      },
+    },
+    {
+      $project: {
+        likeStats: 0,
+        subscriptionStats: 0,
+      },
+    },
+  ]);
+
   if (!video) {
     throw new ApiError(404, "Video not found");
   }

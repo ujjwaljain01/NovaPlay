@@ -2,10 +2,7 @@ import { asyncHandler } from "../utils/asynchandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
-import {
-  deleteFromCloudinary,
-  uploadOnCloudinary,
-} from "../utils/cloudinary.js";
+import { Video } from "../models/video.model.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
@@ -32,18 +29,18 @@ const generateAccessAndRefreshTokens = async (userId) => {
 
 // router.post("/register", memoryUpload().fields([{ name: "avatar", maxCount: 1 }, { name: "coverImage", maxCount: 1 }]), registerUser);
 const registerUser = asyncHandler(async (req, res) => {
-  //get user details from frontend
-  //validate - check if empty
-  //check if user exits or not - username or email
-  //check if images exits avatar is compulsory
-  //upload them to cloudnary
-  //create user object create entry in db
-  //remove password and refresh token field from response
-  //check for user creation
-  //return res
+  // Extract all details directly from req.body (no req.files anymore)
+  const {
+    username,
+    fullName,
+    email,
+    password,
+    avatar, // R2 URL from frontend
+    coverImage, // R2 URL from frontend
+    avatarPublicId, // R2 Object Key
+    coverImagePublicId, // R2 Object Key
+  } = req.body || {};
 
-  const { username, fullName, email, password } = req.body || {};
-  // console.log(req);
   if (
     [fullName, username, email, password].some(
       (field) => typeof field != "string" || field.trim() === ""
@@ -60,38 +57,17 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User with username or email already exists");
   }
 
-  console.log(req.files);
-
-  const avatarLocalPath = req.files?.avatar?.[0]?.path;
-  // const coverImageLocalPath = req.files?.coverImage[0]?.path;
-
-  let coverImageLocalPath;
-  if (
-    req.files &&
-    Array.isArray(req.files.coverImage) &&
-    req.files.coverImage.length > 0
-  ) {
-    coverImageLocalPath = req.files.coverImage[0].path;
-  }
-
-  if (!avatarLocalPath) {
+  // Frontend handles the upload, so we just verify it sent us the avatar data back
+  if (!avatar || !avatarPublicId) {
     throw new ApiError(400, "Avatar file is required");
   }
 
-  const avatar = await uploadOnCloudinary(avatarLocalPath, "avatar");
-  const coverImage = await uploadOnCloudinary(
-    coverImageLocalPath,
-    "coverImage"
-  );
-
-  if (!avatar) throw new ApiError(400, "Avatar file is required");
-
   const user = await User.create({
     fullName,
-    avatar: avatar.url,
-    coverImage: coverImage?.url || "",
-    avatarPublicId: avatar.public_id,
-    coverImagePublicId: coverImage?.public_id || "",
+    avatar: avatar, // Store the R2 URL
+    coverImage: coverImage || "",
+    avatarPublicId: avatarPublicId, // Store the R2 Key for future deletions
+    coverImagePublicId: coverImagePublicId || "",
     email,
     password,
     username: username.toLowerCase(),
@@ -102,12 +78,12 @@ const registerUser = asyncHandler(async (req, res) => {
   );
 
   if (!createdUser) {
-    throw new ApiError(500, "something went wrong while registering the user");
+    throw new ApiError(500, "Something went wrong while registering the user");
   }
 
   return res
     .status(201)
-    .json(new ApiResponse(200, createdUser, "User registered successfully"));
+    .json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
 // router.post("/login", loginUser);
@@ -396,18 +372,20 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         ChannelsSubscriberToCount: {
           $size: "$subscribedTo",
         },
-        isSubscribed: {
-          $cond: {
-            if: {
-              $in: [
-                new mongoose.Types.ObjectId(req.user?._id),
-                "$subscribers.subscriber",
-              ],
-            },
-            then: true,
-            else: false,
-          },
-        },
+        isSubscribed: req.user?._id
+          ? {
+              $cond: {
+                if: {
+                  $in: [
+                    new mongoose.Types.ObjectId(req.user._id),
+                    "$subscribers.subscriber",
+                  ],
+                },
+                then: true,
+                else: false,
+              },
+            }
+          : false,
       },
     },
     {
@@ -436,30 +414,158 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
+// router.get("/c/:username/videos", getUserChannelVideos);
+const getUserChannelVideos = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is missing");
+  }
+
+  const channelUser = await User.findOne({
+    username: username.trim().toLowerCase(),
+  }).select("_id");
+
+  if (!channelUser) {
+    throw new ApiError(404, "Channel does not exist");
+  }
+
+  const limit = Math.min(100, Number.parseInt(req.query.limit, 10) || 10);
+  const { nextCursor } = req.query;
+
+  const matchFilter = {
+    owner: channelUser._id,
+    isPublished: true,
+  };
+
+  if (nextCursor) {
+    if (!mongoose.isValidObjectId(nextCursor)) {
+      throw new ApiError(400, "Invalid cursor id");
+    }
+    matchFilter._id = { $lt: new mongoose.Types.ObjectId(nextCursor) };
+  }
+
+  const videos = await Video.aggregate([
+    {
+      $match: matchFilter,
+    },
+    {
+      $sort: { _id: -1 },
+    },
+    {
+      $limit: limit + 1,
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "owner",
+      },
+    },
+    {
+      $unwind: "$owner",
+    },
+    {
+      $lookup: {
+        from: "likes",
+        let: { videoId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$videoId"] },
+                  { $eq: ["$targetType", "Video"] },
+                ],
+              },
+            },
+          },
+          { $count: "count" },
+        ],
+        as: "likeStats",
+      },
+    },
+    {
+      $addFields: {
+        likeCount: {
+          $ifNull: [{ $first: "$likeStats.count" }, 0],
+        },
+      },
+    },
+    {
+      $project: {
+        videoFile: 1,
+        thumbnail: 1,
+        title: 1,
+        description: 1,
+        duration: 1,
+        views: 1,
+        isPublished: 1,
+        likeCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        "owner._id": 1,
+        "owner.username": 1,
+        "owner.fullName": 1,
+        "owner.avatar": 1,
+      },
+    },
+  ]);
+
+  const hasNextPage = videos.length > limit;
+  if (hasNextPage) {
+    videos.pop();
+  }
+
+  const lastVideo = videos[videos.length - 1];
+  const endCursor = lastVideo ? lastVideo._id : null;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        docs: videos,
+        nextCursor: hasNextPage ? endCursor : null,
+        hasNextPage,
+      },
+      "Channel videos fetched successfully"
+    )
+  );
+});
+
 // router.get("/history", verifyJWT, getWatchHistory);
 const getWatchHistory = asyncHandler(async (req, res) => {
-  const user = await User.aggregate([
+  const watchHistory = await User.aggregate([
     {
       $match: {
         _id: new mongoose.Types.ObjectId(req.user._id),
       },
     },
     {
+      $unwind: {
+        path: "$watchHistory",
+        includeArrayIndex: "historyOrder",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
       $lookup: {
-        from: "Video",
+        from: "videos",
         localField: "watchHistory",
         foreignField: "_id",
-        as: "watchHistory",
+        as: "video",
         pipeline: [
           {
             $lookup: {
-              from: "User",
+              from: "users",
               localField: "owner",
               foreignField: "_id",
               as: "owner",
               pipeline: [
                 {
                   $project: {
+                    _id: 1,
                     fullName: 1,
                     username: 1,
                     avatar: 1,
@@ -469,13 +575,20 @@ const getWatchHistory = asyncHandler(async (req, res) => {
             },
           },
           {
-            $addFields: {
-              owner: {
-                $first: "$owner",
-              },
-            },
+            $unwind: "$owner",
           },
         ],
+      },
+    },
+    {
+      $unwind: "$video",
+    },
+    {
+      $sort: { historyOrder: 1 },
+    },
+    {
+      $replaceRoot: {
+        newRoot: "$video",
       },
     },
   ]);
@@ -483,7 +596,54 @@ const getWatchHistory = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, user[0].watchHistory, "Watch fetched successfully")
+      new ApiResponse(
+        200,
+        watchHistory ?? [],
+        "Watch history fetched successfully"
+      )
+    );
+});
+
+// router.patch("/history", verifyJWT, addToWatchHistory);
+const addToWatchHistory = asyncHandler(async (req, res) => {
+  const { videoId } = req.body || {};
+
+  if (!videoId || !mongoose.isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid video id");
+  }
+
+  const videoExists = await Video.exists({ _id: videoId });
+  if (!videoExists) {
+    throw new ApiError(404, "Video not found");
+  }
+
+  const videoObjectId = new mongoose.Types.ObjectId(videoId);
+
+  await User.findByIdAndUpdate(req.user._id, {
+    $pull: { watchHistory: videoObjectId },
+  });
+
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $push: {
+        watchHistory: {
+          $each: [videoObjectId],
+          $position: 0,
+        },
+      },
+    },
+    { returnDocument: "after", projection: { watchHistory: 1 } }
+  );
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        updatedUser?.watchHistory ?? [],
+        "Watch history updated successfully"
+      )
     );
 });
 
@@ -580,6 +740,8 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getUserChannelVideos,
   getWatchHistory,
+  addToWatchHistory,
   googleAuthCallback,
 };

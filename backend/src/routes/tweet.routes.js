@@ -7,15 +7,18 @@ import {
   updateTweet,
   getTweetById,
 } from "../controllers/tweet.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { optionalVerifyJWT, verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.route("/").get(getAllTweets).post(verifyJWT, createTweet);
-router.route("/user/:userId").get(verifyJWT, getUserTweets);
+router
+  .route("/")
+  .get(optionalVerifyJWT, getAllTweets)
+  .post(verifyJWT, createTweet);
+router.route("/user/:userId").get(optionalVerifyJWT, getUserTweets);
 router
   .route("/:tweetId")
-  .get(verifyJWT, getTweetById)
+  .get(optionalVerifyJWT, getTweetById)
   .patch(verifyJWT, updateTweet)
   .delete(verifyJWT, deleteTweet);
 

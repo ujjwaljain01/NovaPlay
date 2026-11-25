@@ -9,35 +9,26 @@ import {
   updateVideoAssets,
   incrementViews,
 } from "../controllers/video.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { upload } from "../middlewares/multer.middleware.js";
+import { generateUploadUrl } from "../utils/r2.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
 router
   .route("/")
   .get(getAllVideos)
-  .post(
-    verifyJWT,
-    upload.fields([
-      { name: "video", maxCount: 1 },
-      { name: "thumbnail", maxCount: 1 },
-    ]),
-    publishVideo
-  );
+  .post(verifyJWT, publishVideo);
 
-router.route("/:videoId").get(getVideoById).delete(verifyJWT, deleteVideo);
+router
+  .route("/:videoId")
+  .get(optionalVerifyJWT, getVideoById)
+  .delete(verifyJWT, deleteVideo);
 
 router.route("/:videoId/details").patch(verifyJWT, updateVideoDetails);
 
-router.route("/:videoId/assets").patch(
-  verifyJWT,
-  upload.fields([
-    { name: "video", maxCount: 1 },
-    { name: "thumbnail", maxCount: 1 },
-  ]),
-  updateVideoAssets
-);
+router
+  .route("/:videoId/assets")
+  .patch(verifyJWT, generateUploadUrl, updateVideoAssets);
 
 router.route("/:videoId/toggle-publish").patch(verifyJWT, togglePublishStatus);
 

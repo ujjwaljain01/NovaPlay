@@ -60,6 +60,9 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
+userSchema.index({ username: "text", fullName: "text" });
+userSchema.index({ createdAt: -1 });
+
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
 

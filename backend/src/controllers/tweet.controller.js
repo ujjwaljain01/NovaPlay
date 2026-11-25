@@ -10,58 +10,124 @@ const ensureValidTweet = (id) => {
   }
 };
 
+const getOptionalCurrentUserId = (req) =>
+  req.user?._id ? new mongoose.Types.ObjectId(req.user._id) : null;
+
+const buildTweetEnrichmentStages = (currentUserId) => [
+  {
+    $lookup: {
+      from: "users",
+      localField: "owner",
+      foreignField: "_id",
+      as: "ownerDetails",
+      pipeline: [
+        {
+          $project: {
+            avatar: 1,
+            username: 1,
+            fullName: 1,
+            _id: 1,
+          },
+        },
+      ],
+    },
+  },
+  {
+    $lookup: {
+      from: "likes",
+      let: { tweetId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$targetId", "$$tweetId"] },
+                { $eq: ["$targetType", "Tweet"] },
+              ],
+            },
+          },
+        },
+      ],
+      as: "likes",
+    },
+  },
+  {
+    $lookup: {
+      from: "comments",
+      let: { tweetId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$targetId", "$$tweetId"] },
+                { $eq: ["$targetType", "Tweet"] },
+                { $eq: ["$parentCommentId", null] },
+              ],
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "comments",
+            localField: "_id",
+            foreignField: "parentCommentId",
+            as: "replies",
+          },
+        },
+        {
+          $project: {
+            total: { $add: [1, { $size: "$replies" }] },
+          },
+        },
+      ],
+      as: "commentThreads",
+    },
+  },
+  {
+    $addFields: {
+      owner: { $first: "$ownerDetails" },
+      likesCount: { $size: "$likes" },
+      commentsCount: { $sum: "$commentThreads.total" },
+      isLiked: currentUserId
+        ? { $in: [currentUserId, "$likes.likedBy"] }
+        : false,
+    },
+  },
+  {
+    $project: {
+      ownerDetails: 0,
+      likes: 0,
+      commentThreads: 0,
+    },
+  },
+];
+
 const getAllTweets = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Number.parseInt(req.query.limit, 10) || 8);
   const { nextCursor } = req.query;
 
-  // 1. Build a clean, dynamic match filter first
   const matchFilter = {};
   if (nextCursor) {
+    if (!mongoose.isValidObjectId(nextCursor)) {
+      throw new ApiError(400, "Invalid cursor");
+    }
     matchFilter._id = { $lt: new mongoose.Types.ObjectId(nextCursor) };
   }
 
-  // 2. Pass the entire pipeline directly as a clean, structured array
-  const tweets = await Tweet.aggregate([
-    {
-      $match: matchFilter,
-    },
-    {
-      $sort: { _id: -1 }, // Chronological sorting using MongoDB ObjectIds
-    },
-    {
-      $limit: limit + 1, // Lookahead record to evaluate if a next page exists
-    },
-    {
-      $lookup: {
-        from: "users", // Must match your exact MongoDB collection name for users
-        localField: "owner",
-        foreignField: "_id",
-        as: "owner",
-      },
-    },
-    {
-      $unwind: "$owner", // Flattens the owner array into an object
-    },
-    {
-      $project: {
-        _id: 1,
-        content: 1,
-        createdAt: 1,
-        updatedAt: 1,
+  const currentUserId = getOptionalCurrentUserId(req);
 
-        // Selected owner profile fields
-        "owner._id": 1,
-        "owner.username": 1,
-        "owner.fullName": 1,
-        "owner.avatar": 1,
-      },
-    },
+  const tweets = await Tweet.aggregate([
+    { $match: matchFilter },
+    { $sort: { _id: -1 } },
+    { $limit: limit + 1 },
+    ...buildTweetEnrichmentStages(currentUserId),
   ]);
 
-  // 3. Process infinite scroll evaluation
+  // Process infinite scroll evaluation
   const hasNextPage = tweets.length > limit;
   if (hasNextPage) {
-    tweets.pop(); // Remove the extra lookahead item
+    tweets.pop();
   }
 
   const lastTweet = tweets[tweets.length - 1];
@@ -191,54 +257,46 @@ const deleteTweet = asyncHandler(async (req, res) => {
 const getUserTweets = asyncHandler(async (req, res) => {
   const { userId } = req.params;
 
-  if (!req.user?._id) {
-    throw new ApiError(401, "Authentication required to fetch user tweets");
-  }
-
   if (!mongoose.isValidObjectId(userId)) {
     throw new ApiError(400, "Invalid user id");
   }
 
   const currentCursor = req.query.nextCursor;
-  const limit = Math.min(100, parseInt(req.query.limit) || 10);
+  const limit = Math.min(100, parseInt(req.query.limit, 10) || 10);
 
-  // 2. Build the query dynamically
-  let query = { owner: req.user._id };
+  const matchFilter = { owner: new mongoose.Types.ObjectId(userId) };
   if (currentCursor) {
-    // Only fetch tweets older than the last one the user saw
-    query._id = { $lt: currentCursor };
+    if (!mongoose.isValidObjectId(currentCursor)) {
+      throw new ApiError(400, "Invalid cursor");
+    }
+    matchFilter._id = { $lt: new mongoose.Types.ObjectId(currentCursor) };
   }
 
-  // 3. Fetch one extra item to check if there is a next page
-  const tweets = await Tweet.find(query)
-    .sort({ _id: -1 }) // Newest first
-    .limit(limit + 1) // Fetch 11 items if limit is 10
-    .lean();
+  const currentUserId = getOptionalCurrentUserId(req);
 
-  // 4. Determine if more items exist
+  const tweets = await Tweet.aggregate([
+    { $match: matchFilter },
+    { $sort: { _id: -1 } },
+    { $limit: limit + 1 },
+    ...buildTweetEnrichmentStages(currentUserId),
+  ]);
+
   const hasNextPage = tweets.length > limit;
   if (hasNextPage) {
-    tweets.pop(); // Remove the extra 11th item kept for verification
+    tweets.pop();
   }
 
   const nextCursor = hasNextPage ? tweets[tweets.length - 1]._id : null;
-
-  if (!tweets) {
-    throw new ApiError(
-      500,
-      "Failed to fetch user tweets due to a DB server error"
-    );
-  }
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
-        tweets, // The array of tweet documents
+        tweets,
         pagination: {
-          nextCursor: nextCursor, // The ID of the last tweet in this batch, or null
-          hasNextPage: hasNextPage, // True if there are more tweets to fetch, false if done
-          limit: limit, // How many items were requested
+          nextCursor,
+          hasNextPage,
+          limit,
         },
       },
       "User tweets fetched successfully"
@@ -249,43 +307,15 @@ const getUserTweets = asyncHandler(async (req, res) => {
 const getTweetById = asyncHandler(async (req, res) => {
   const { tweetId } = req.params;
 
-  if (!req.user?._id) {
-    throw new ApiError(401, "Authentication required to update a tweet");
-  }
-
   ensureValidTweet(tweetId);
+
+  const currentUserId = getOptionalCurrentUserId(req);
 
   const tweet = await Tweet.aggregate([
     {
       $match: { _id: new mongoose.Types.ObjectId(tweetId) },
     },
-    {
-      $lookup: {
-        from: "users",
-        localField: "owner",
-        foreignField: "_id",
-        as: "ownerDetails",
-        pipeline: [
-          {
-            $project: {
-              avatar: 1,
-              username: 1,
-              _id: 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $addFields: {
-        owner: { $first: "$ownerDetails" },
-      },
-    },
-    {
-      $project: {
-        ownerDetails: 0,
-      },
-    },
+    ...buildTweetEnrichmentStages(currentUserId),
   ]);
 
   if (!tweet || tweet.length === 0) {
@@ -294,7 +324,7 @@ const getTweetById = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, tweet, "Tweet fetched successfully"));
+    .json(new ApiResponse(200, tweet[0], "Tweet fetched successfully"));
 });
 
 export {

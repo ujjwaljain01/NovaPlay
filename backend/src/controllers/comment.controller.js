@@ -9,6 +9,15 @@ import { asyncHandler } from "../utils/asynchandler.js";
 // Helper function to validate MongoDB ObjectId
 const isValidObjectId = (id) => mongoose.isValidObjectId(id);
 
+const EDIT_TOLERANCE_MS = 1000;
+const computeIsEdited = (createdAt, updatedAt) => {
+  if (!createdAt || !updatedAt) return false;
+  return (
+    new Date(updatedAt).getTime() - new Date(createdAt).getTime() >
+    EDIT_TOLERANCE_MS
+  );
+};
+
 const getComments = asyncHandler(async (req, res) => {
   const { targetId } = req.params;
   const { limit = 10, cursor } = req.query;
@@ -26,7 +35,7 @@ const getComments = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Video or Tweet not found");
   }
 
-  const parsedLimit = parseInt(limit, 10);
+  const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
 
   const matchStage = {
     targetId: new mongoose.Types.ObjectId(targetId),
@@ -34,10 +43,18 @@ const getComments = asyncHandler(async (req, res) => {
   };
 
   if (cursor) {
+    const cursorDate = new Date(cursor);
+    if (Number.isNaN(cursorDate.getTime())) {
+      throw new ApiError(400, "Invalid cursor");
+    }
     matchStage.createdAt = {
-      $lt: new Date(cursor),
+      $lt: cursorDate,
     };
   }
+
+  const currentUserId = req.user?._id
+    ? new mongoose.Types.ObjectId(req.user._id)
+    : null;
 
   const aggregationPipeline = [
     {
@@ -65,25 +82,51 @@ const getComments = asyncHandler(async (req, res) => {
       },
     },
     {
+      $lookup: {
+        from: "likes",
+        let: { commentId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$commentId"] },
+                  { $eq: ["$targetType", "Comment"] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "likes",
+      },
+    },
+    {
       $project: {
         _id: 1,
         content: 1,
         targetType: 1,
         createdAt: 1,
         updatedAt: 1,
+        isEdited: {
+          $gt: [{ $subtract: ["$updatedAt", "$createdAt"] }, EDIT_TOLERANCE_MS],
+        },
         replyCount: { $size: "$replies" },
+        repliesCount: { $size: "$replies" },
+        likeCount: { $size: "$likes" },
+        isLiked: currentUserId
+          ? { $in: [currentUserId, "$likes.likedBy"] }
+          : false,
         owner: {
           _id: "$owner._id",
           username: "$owner.username",
+          fullName: "$owner.fullName",
           avatar: "$owner.avatar",
         },
       },
     },
   ];
 
-  const comments = await Comment.aggregatePaginate(
-    Comment.aggregate(aggregationPipeline)
-  );
+  const comments = await Comment.aggregate(aggregationPipeline);
 
   const hasNextPage = comments.length > parsedLimit;
 
@@ -92,7 +135,9 @@ const getComments = asyncHandler(async (req, res) => {
   }
 
   const nextCursor =
-    comments.length > 0 ? comments[comments.length - 1].createdAt : null;
+    hasNextPage && comments.length > 0
+      ? comments[comments.length - 1].createdAt
+      : null;
 
   res
     .status(200)
@@ -123,14 +168,22 @@ const getReplies = asyncHandler(async (req, res) => {
   };
 
   if (cursor) {
-    matchStage.createdAt = { $lt: new Date(cursor) };
+    const cursorDate = new Date(cursor);
+    if (Number.isNaN(cursorDate.getTime())) {
+      throw new ApiError(400, "Invalid cursor");
+    }
+    matchStage.createdAt = { $gt: cursorDate };
   }
 
-  const parsedLimit = parseInt(limit, 10);
+  const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+
+  const currentUserId = req.user?._id
+    ? new mongoose.Types.ObjectId(req.user._id)
+    : null;
 
   const aggregationPipeline = [
     { $match: matchStage },
-    { $sort: { createdAt: 1 } }, 
+    { $sort: { createdAt: 1 } },
     { $limit: parsedLimit + 1 },
     {
       $lookup: {
@@ -142,14 +195,43 @@ const getReplies = asyncHandler(async (req, res) => {
     },
     { $unwind: "$owner" },
     {
+      $lookup: {
+        from: "likes",
+        let: { commentId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$commentId"] },
+                  { $eq: ["$targetType", "Comment"] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "likes",
+      },
+    },
+    {
       $project: {
         _id: 1,
         content: 1,
+        targetType: 1,
+        parentCommentId: 1,
         createdAt: 1,
         updatedAt: 1,
+        isEdited: {
+          $gt: [{ $subtract: ["$updatedAt", "$createdAt"] }, EDIT_TOLERANCE_MS],
+        },
+        likeCount: { $size: "$likes" },
+        isLiked: currentUserId
+          ? { $in: [currentUserId, "$likes.likedBy"] }
+          : false,
         owner: {
           _id: "$owner._id",
           username: "$owner.username",
+          fullName: "$owner.fullName",
           avatar: "$owner.avatar",
         },
       },
@@ -159,13 +241,15 @@ const getReplies = asyncHandler(async (req, res) => {
   const results = await Comment.aggregate(aggregationPipeline);
 
   const hasNextPage = results.length > parsedLimit;
-  
+
   if (hasNextPage) {
     results.pop();
   }
 
   const nextCursor =
-    results.length > 0 ? results[results.length - 1].createdAt : null;
+    hasNextPage && results.length > 0
+      ? results[results.length - 1].createdAt
+      : null;
 
   res.status(200).json(
     new ApiResponse(
@@ -235,14 +319,23 @@ const addComment = asyncHandler(async (req, res) => {
 
   await comment.populate({
     path: "owner",
-    select: "username avatar",
+    select: "username fullName avatar",
   });
 
   const successMessage = parentComment ? "Reply added successfully" : "Comment added successfully";
 
+  const responseComment = {
+    ...comment.toObject(),
+    likeCount: 0,
+    replyCount: 0,
+    repliesCount: 0,
+    isLiked: false,
+    isEdited: false,
+  };
+
   return res
     .status(201)
-    .json(new ApiResponse(201, comment, successMessage));
+    .json(new ApiResponse(201, responseComment, successMessage));
 });
 
 
@@ -268,35 +361,36 @@ const updateComment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Comment content cannot exceed 320 characters");
   }
 
-  const comment = await Comment.findByIdAndUpdate(
-    { _id: commentId, owner: req.user?._id },
-    {
-      $set: { content: trimmedContent },
-    },
-    {
-      new: true,
-      runValidators: true,
-    }
-  );
+  const comment = await Comment.findById(commentId);
 
   if (!comment) {
-    const commentExist = await Comment.exists({ _id: commentId });
-    if (!commentExist) {
-      throw new ApiError(404, "Comment not found");
-    }
+    throw new ApiError(404, "Comment not found");
+  }
+
+  if (comment.owner.toString() !== req.user?._id?.toString()) {
     throw new ApiError(403, "You can only update your own comments");
   }
 
-  const updatedComment = await comment.populate([
-    {
-      path: "owner",
-      select: "username avatar",
-    },
-  ]);
+  if (comment.content !== trimmedContent) {
+    comment.content = trimmedContent;
+    await comment.save();
+  }
 
-  res
+  await comment.populate({
+    path: "owner",
+    select: "username fullName avatar",
+  });
+
+  const responseComment = {
+    ...comment.toObject(),
+    isEdited: computeIsEdited(comment.createdAt, comment.updatedAt),
+  };
+
+  return res
     .status(200)
-    .json(new ApiResponse(200, updatedComment, "Comment updated successfully"));
+    .json(
+      new ApiResponse(200, responseComment, "Comment updated successfully")
+    );
 });
 
 const deleteComment = asyncHandler(async (req, res) => {
@@ -307,7 +401,7 @@ const deleteComment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid comment ID");
   }
 
-  const comment = await Comment.findByIdAndDelete({
+  const comment = await Comment.findOneAndDelete({
     _id: commentId,
     owner: userId,
   });
@@ -320,6 +414,10 @@ const deleteComment = asyncHandler(async (req, res) => {
     }
 
     throw new ApiError(403, "You can only delete your own comments");
+  }
+
+  if (!comment.parentCommentId) {
+    await Comment.deleteMany({ parentCommentId: comment._id });
   }
 
   res

@@ -116,7 +116,7 @@ const getPlaylistById = asyncHandler(async (req, res) => {
         from: "users",
         localField: "owner",
         foreignField: "_id",
-        as: "playListOwnerDetails",
+        as: "playlistOwnerDetails",
         pipeline: [
           {
             $project: {
@@ -130,7 +130,7 @@ const getPlaylistById = asyncHandler(async (req, res) => {
     },
     {
       $unwind: {
-        path: "$playListOwnerDetails",
+        path: "$playlistOwnerDetails",
         preserveNullAndEmptyArrays: true,
       },
     },
@@ -151,7 +151,7 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
+    .json(new ApiResponse(200, playlist[0], "Playlist fetched successfully"));
 });
 
 //router.route("/:playlistId").patch(updatePlaylist);
